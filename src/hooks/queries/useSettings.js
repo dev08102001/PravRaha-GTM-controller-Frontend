@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import api from "../../services/api";
+// import api from "../../services/api";
+import { getSettings } from "../../services/settingsService";
  
 /*
  * TEMPORARY MOCK SETTINGS
@@ -91,19 +92,26 @@ export default function useSettings() {
  
   const fetchSettings = async () => {
     try {
-      const response = await api.get("/settings");
+      // const response = await api.get("/settings");
  
-      console.log("SETTINGS API RESPONSE:", response.data);
+      // console.log("SETTINGS API RESPONSE:", response.data);
  
-      if (response.data?.success) {
-        /*
-         * If backend returns actual settings,
-         * use them.
-         *
-         * Otherwise use temporary mock data.
-         */
-        setSettings(response.data.data || MOCK_SETTINGS);
-      }
+      // if (response.data?.success) {
+      // //   /*
+      // //    * If backend returns actual settings,
+      // //    * use them.
+      // //    *
+      // //    * Otherwise use temporary mock data.
+      // //    */
+      //   setSettings(response.data.data || MOCK_SETTINGS);
+      // }
+    const response = await getSettings();
+
+    if (response?.success) {
+      setSettings(response.data ?? MOCK_SETTINGS);
+    } else {
+      setSettings(MOCK_SETTINGS);
+    }
     } catch (error) {
       console.error("Settings Fetch Error:", error);
  

@@ -182,75 +182,72 @@
 // }
 
 
-import { useEffect, useState } from "react";
-import api from "../services/api";
+import { useQueryClient } from "@tanstack/react-query";
+
+import useOutreach from "../hooks/queries/useOutreach";
+
+import {
+  approveOutreachMessage,
+  rejectOutreachMessage,
+} from "../services/outreachService";
 
 export default function Outreach() {
-  const [messages, setMessages] = useState([]);
-  const [loading, setLoading] = useState(false);
+const queryClient = useQueryClient();
 
-  useEffect(() => {
-    fetchMessages();
-  }, []);
+const {
+  data: messages = [],
+  isLoading,
+  isError,
+} = useOutreach();
 
-  const fetchMessages = async () => {
-    try {
-      setLoading(true);
+const approveMessage = async (id) => {
+  try {
+    await approveOutreachMessage(id);
 
-      const response = await api.get("/outreach");
+    await queryClient.invalidateQueries({
+      queryKey: ["outreach"],
+    });
+  } catch (error) {
+    console.error(error);
+    alert("Failed to approve message");
+  }
+};
 
-      setMessages(response.data);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
+const rejectMessage = async (id) => {
+  try {
+    await rejectOutreachMessage(id);
 
-  const approveMessage = async (id) => {
-    try {
-      await api.put(`/outreach/${id}/approve`);
+    await queryClient.invalidateQueries({
+      queryKey: ["outreach"],
+    });
+  } catch (error) {
+    console.error(error);
+    alert("Failed to reject message");
+  }
+};
 
-      fetchMessages();
-    } catch (error) {
-      console.error(error);
-
-      alert("Failed to approve message");
-    }
-  };
-
-  const rejectMessage = async (id) => {
-    try {
-      await api.put(`/outreach/${id}/reject`);
-
-      fetchMessages();
-    } catch (error) {
-      console.error(error);
-
-      alert("Failed to reject message");
-    }
-  };
-
-  const approveAllMessages = async () => {
-    try {
-      for (const msg of messages) {
-        if (msg.status !== "APPROVED") {
-          await api.put(`/outreach/${msg._id}/approve`);
-        }
+const approveAllMessages = async () => {
+  try {
+    for (const msg of messages) {
+      if (msg.status !== "APPROVED") {
+        await approveOutreachMessage(msg._id);
       }
-
-      fetchMessages();
-    } catch (error) {
-      console.error(error);
-      alert("Failed to approve all messages");
     }
-  };
+
+    await queryClient.invalidateQueries({
+      queryKey: ["outreach"],
+    });
+  } catch (error) {
+    console.error(error);
+    alert("Failed to approve all messages");
+  }
+};
 
   const editMessage = (msg) => {
     alert(`Edit message for ${msg.name}`);
   };
 
-  if (loading) {
+   if (isLoading){
     return (
       <div className="flex justify-center items-center h-[400px]">
         <h2 className="text-xl text-white">
@@ -259,6 +256,13 @@ export default function Outreach() {
       </div>
     );
   }
+    if (isError) {
+  return (
+    <div className="text-red-500 text-xl">
+      Failed to load outreach messages
+    </div>
+  );
+}
 
   return (
     <div className="space-y-6">

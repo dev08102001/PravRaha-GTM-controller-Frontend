@@ -1,21 +1,31 @@
-import { useEffect, useState } from "react";
-import api from "../services/api";
+import useAgents from "../hooks/queries/useAgents";
 
 export default function Agents() {
-  const [agents, setAgents] = useState([]);
+  const {
+    data: agents = [],
+    isLoading,
+    isError,
+  } = useAgents();
 
-  useEffect(() => {
-    fetchAgents();
-  }, []);
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-[500px]">
+        <div className="text-white text-xl">
+          Loading Agents...
+        </div>
+      </div>
+    );
+  }
 
-  const fetchAgents = async () => {
-    try {
-      const response = await api.get("/agents");
-      setAgents(response.data);
-    } catch (error) {
-      console.log(error);
-    }
-  };
+  if (isError) {
+    return (
+      <div className="flex items-center justify-center h-[500px]">
+        <div className="text-red-400 text-xl">
+          Failed to load agents.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -46,9 +56,14 @@ export default function Agents() {
       {/* Agent Cards */}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        {agents.length === 0 && (
+          <div className="bg-[#151D2E] rounded-2xl p-6 text-center text-gray-400">
+          No agents available.
+        </div>
+      )}
         {agents.map((agent) => (
           <div
-            key={agent.name}
+            key={agent._id || agent.name}
             className="bg-gradient-to-br from-[#1A2340] to-[#151D2E] rounded-2xl p-6 border border-slate-700"
           >
             {/* Header */}
@@ -113,14 +128,14 @@ export default function Agents() {
 
             <div className="bg-[#0B1220] border border-slate-800 rounded-xl p-4 font-mono text-sm h-[220px] overflow-y-auto">
               <div className="space-y-2">
-                {agent.logs.map((log, index) => (
-                  <div
-                    key={index}
-                    className="text-green-300"
-                  >
-                    ▶ {log}
-                  </div>
-                ))}
+              {(agent.logs || []).map((log, index) => (
+                <div
+                  key={index}
+                  className="text-green-300"
+                >
+                  ▶ {log}
+                </div>
+              ))}
               </div>
             </div>
           </div>

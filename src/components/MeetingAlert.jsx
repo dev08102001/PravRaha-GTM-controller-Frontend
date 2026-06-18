@@ -152,64 +152,46 @@
 
 
 
-import { useEffect, useState } from "react";
-import { getMeetingAlert } from "../services/meetingService";
+import useMeetingAlert from "../hooks/queries/useMeetingAlert";
 
 export default function MeetingAlert() {
-  const [alert, setAlert] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    fetchMeetingAlert();
-  }, []);
-
-const fetchMeetingAlert = async () => {
-  try {
-    setLoading(true);
-    setError(false);
-
-    const data = await getMeetingAlert();
-    setAlert(data);
-  } catch (err) {
-    console.error(err);
-    setError(true);
-  } finally {
-    setLoading(false);
-  }
-};
+  const {
+    data: alert,
+    isLoading,
+    isError,
+  } = useMeetingAlert();
 
   const handleOpenBrief = () => {
-    // Later you can navigate to a brief page or open a modal
     console.log("Open Brief clicked");
   };
 
   const handleClose = () => {
-    setAlert(null);
+    console.log("Close clicked");
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="bg-[#151D2E] rounded-2xl p-6">
         Loading...
       </div>
     );
   }
-  if (error) {
-  return (
-    <div className="bg-[#151D2E] rounded-2xl p-6 text-red-400">
-      Failed to load meeting alert.
-    </div>
-  );
-}
 
-if (!alert) {
-  return (
-    <div className="bg-[#151D2E] rounded-2xl p-6 text-gray-400">
-      No meeting alerts available.
-    </div>
-  );
-}
+  if (isError) {
+    return (
+      <div className="bg-[#151D2E] rounded-2xl p-6 text-red-400">
+        Failed to load meeting alert.
+      </div>
+    );
+  }
+
+  if (!alert) {
+    return (
+      <div className="bg-[#151D2E] rounded-2xl p-6 text-gray-400">
+        No meeting alerts available.
+      </div>
+    );
+  }
 
   return (
     <div className="bg-gradient-to-r from-cyan-900/40 to-blue-900/40 border border-cyan-500/30 rounded-2xl px-8 py-6 flex items-center justify-between">

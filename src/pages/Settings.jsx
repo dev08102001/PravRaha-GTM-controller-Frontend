@@ -506,7 +506,7 @@ import EmailInfrastructureCard from "../components/settings/EmailInfrastructureC
  
 export default function Settings() {
   const { loading, settings } = useSettings();
-  console.log("settings =", settings);
+
  
  
   // **************************CHANGE************************** //
@@ -520,6 +520,7 @@ export default function Settings() {
       </div>
     );
   }
+
  
   return (
       <div className="space-y-6 text-white">

@@ -1,26 +1,24 @@
-import { useEffect, useState } from "react";
-import api from "../services/api";
+import useDashboardMetrics from "../hooks/queries/useDashboardMetrics";
 
 export default function MetricBar() {
-  const [metrics, setMetrics] = useState(null);
+  const {
+    data: metrics,
+    isLoading,
+    isError,
+  } = useDashboardMetrics();
 
-  useEffect(() => {
-    fetchMetrics();
-  }, []);
-
-  const fetchMetrics = async () => {
-    try {
-      const response = await api.get("/dashboard/metrics");
-      setMetrics(response.data);
-    } catch (error) {
-      console.log(error);
-    }
-  };
-
-  if (!metrics) {
+  if (isLoading) {
     return (
       <div className="bg-[#0E1422] border-b border-gray-800 p-4">
         Loading metrics...
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="bg-[#0E1422] border-b border-gray-800 p-4 text-red-400">
+        Failed to load metrics
       </div>
     );
   }
@@ -51,7 +49,6 @@ export default function MetricBar() {
   return (
     <div className="bg-[#0E1422] border-b border-gray-800">
       <div className="grid grid-cols-5">
-
         {data.map((item, index) => (
           <div
             key={item.title}
@@ -70,7 +67,6 @@ export default function MetricBar() {
             </h3>
           </div>
         ))}
-
       </div>
     </div>
   );
