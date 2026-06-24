@@ -481,38 +481,188 @@
  
  
  
+// import useSettings from "../hooks/queries/useSettings";
+// import IntegrationsCard from "../components/settings/IntegrationsCard";
+// import AgentPreferencesCard from "../components/settings/AgentPreferencesCard";
+// import TeamAccessCard from "../components/settings/TeamAccessCard";
+// import EmailInfrastructureCard from "../components/settings/EmailInfrastructureCard";
+ 
+// // **************************CHANGE************************** //
+ 
+// // export default function Settings() {
+// //   const [loading, setLoading] = useState(true);
+ 
+// //   const [settings, setSettings] = useState({
+// //     integrations: [],
+// //     preferences: [],
+// //     teamMembers: [],
+// //     emailInfrastructure: {
+// //       sendGridConnected: "",
+// //       domainWarming: "",
+// //       dailySendLimit: "",
+// //       healthScore: 0,
+// //     },
+// //   });
+ 
+// export default function Settings() {
+//   const { loading, settings } = useSettings();
+
+ 
+ 
+//   // **************************CHANGE************************** //
+ 
+ 
+ 
+//   if (loading) {
+//     return (
+//       <div className="text-white text-xl">
+//         Loading Settings...
+//       </div>
+//     );
+//   }
+
+ 
+//   return (
+//       <div className="space-y-6 text-white">
+//     <h1>SETTINGS PAGE</h1>
+ 
+//     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+ 
+//   <IntegrationsCard
+//     integrations={settings?.integrations || []}
+//   />
+ 
+//   <AgentPreferencesCard
+//     preferences={settings?.preferences || []}
+//   />
+ 
+//   <TeamAccessCard
+//     teamMembers={settings?.teamMembers || []}
+//   />
+ 
+// </div>
+ 
+// <EmailInfrastructureCard
+//   emailInfrastructure={
+//     settings?.emailInfrastructure || {}
+//   }
+// />
+//   </div>
+// );
+   
+// }
+
+// import useSettings from "../hooks/queries/useSettings";
+// import IntegrationsCard from "../components/settings/IntegrationsCard";
+// import AgentPreferencesCard from "../components/settings/AgentPreferencesCard";
+// import TeamAccessCard from "../components/settings/TeamAccessCard";
+// import EmailInfrastructureCard from "../components/settings/EmailInfrastructureCard";
+// // import { saveSettings } from "../services/settingsService";
+// export default function Settings() {
+//   const { loading, settings } = useSettings();
+
+//   const user = JSON.parse(localStorage.getItem("user")) || {};
+//   const role = user?.role?.toLowerCase();
+
+//   if (loading) {
+//     return (
+//       <div className="text-white text-xl">
+//         Loading Settings...
+//       </div>
+//     );
+//   }
+
+//   return (
+//     <div className="space-y-6 text-white">
+//       <h1>SETTINGS PAGE</h1>
+
+//       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+//         {/* Everyone can see */}
+//         <IntegrationsCard
+//           integrations={settings?.integrations || []}
+//         />
+
+//         {/* Everyone can see */}
+//         <AgentPreferencesCard
+//           preferences={settings?.preferences || []}
+//         />
+
+//         {/* Only Admin & Manager */}
+//         {(role === "admin" || role === "manager") && (
+//           <TeamAccessCard
+//             teamMembers={settings?.teamMembers || []}
+//           />
+//         )}
+
+//       </div>
+
+//       {/* Only Admin */}
+//       {role === "admin" && (
+//         <EmailInfrastructureCard
+//           emailInfrastructure={
+//             settings?.emailInfrastructure || {}
+//           }
+//         />
+//       )}
+//     </div>
+//   );
+// }
+
+
+
+
 import useSettings from "../hooks/queries/useSettings";
 import IntegrationsCard from "../components/settings/IntegrationsCard";
 import AgentPreferencesCard from "../components/settings/AgentPreferencesCard";
 import TeamAccessCard from "../components/settings/TeamAccessCard";
 import EmailInfrastructureCard from "../components/settings/EmailInfrastructureCard";
- 
-// **************************CHANGE************************** //
- 
-// export default function Settings() {
-//   const [loading, setLoading] = useState(true);
- 
-//   const [settings, setSettings] = useState({
-//     integrations: [],
-//     preferences: [],
-//     teamMembers: [],
-//     emailInfrastructure: {
-//       sendGridConnected: "",
-//       domainWarming: "",
-//       dailySendLimit: "",
-//       healthScore: 0,
-//     },
-//   });
- 
-export default function Settings() {
-  const { loading, settings } = useSettings();
+import { saveSettings } from "../services/settingsService";
 
- 
- 
-  // **************************CHANGE************************** //
- 
- 
- 
+export default function Settings() {
+  const {
+    loading,
+    settings,
+    setSettings,
+  } = useSettings();
+
+  const user =
+    JSON.parse(localStorage.getItem("user")) || {};
+
+  const role = user?.role?.toLowerCase();
+
+  /*
+   * Admin sees all integrations.
+   * Other users only see integrations assigned to them.
+   */
+  const allowedIntegrations =
+  role === "admin" ||
+  role === "manager"
+    ? settings?.integrations || []
+    : (settings?.integrations || []).filter(
+        (item) =>
+          user?.integrations?.includes(
+            item.name
+          )
+      );
+
+  const handleSave = async () => {
+    try {
+      await saveSettings({
+        integrations: settings?.integrations || [],
+        preferences: settings?.preferences || [],
+        teamMembers: settings?.teamMembers || [],
+        emailInfrastructure:
+          settings?.emailInfrastructure || {},
+      });
+
+      alert("Settings saved successfully");
+    } catch (error) {
+      console.error("Save Settings Error:", error);
+      alert("Failed to save settings");
+    }
+  };
+
   if (loading) {
     return (
       <div className="text-white text-xl">
@@ -521,33 +671,59 @@ export default function Settings() {
     );
   }
 
- 
   return (
-      <div className="space-y-6 text-white">
-    <h1>SETTINGS PAGE</h1>
- 
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
- 
-  <IntegrationsCard
-    integrations={settings?.integrations || []}
+    <div className="space-y-6 text-white">
+      <h1 className="text-2xl font-bold">
+        SETTINGS PAGE
+      </h1>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        {/* Integrations */}
+        <IntegrationsCard
+          integrations={allowedIntegrations}
+          settings={settings}
+          setSettings={setSettings}
+          role={role}
+        />
+
+        {/* Agent Preferences */}
+        <AgentPreferencesCard
+          preferences={settings?.preferences || []}
+          settings={settings}
+          setSettings={setSettings}
+          role={role}
+        />
+
+        {/* Team Access - Admin & Manager Only */}
+        {(role === "admin" ||
+          role === "manager") && (
+          <TeamAccessCard
+            teamMembers={settings?.teamMembers || []}
+          />
+        )}
+      </div>
+
+      {/* Email Infrastructure - Admin Only */}
+        {role === "admin" && (
+  <EmailInfrastructureCard
+    emailInfrastructure={
+      settings?.emailInfrastructure || {}
+    }
   />
- 
-  <AgentPreferencesCard
-    preferences={settings?.preferences || []}
-  />
- 
-  <TeamAccessCard
-    teamMembers={settings?.teamMembers || []}
-  />
- 
-</div>
- 
-<EmailInfrastructureCard
-  emailInfrastructure={
-    settings?.emailInfrastructure || {}
-  }
-/>
-  </div>
-);
-   
+)}
+
+      {/* Save Button - Admin Only */}
+      {["admin", "manager", "user"].includes(role) && (
+        <div className="flex justify-end">
+          <button
+            onClick={handleSave}
+            className="px-6 py-3 bg-cyan-500 hover:bg-cyan-600 text-white font-semibold rounded-lg transition duration-200"
+          >
+            Save Settings
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }

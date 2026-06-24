@@ -6,10 +6,12 @@ export default function useCampaigns() {
   return useQuery({
     queryKey: ["campaigns"],
     queryFn: async () => {
-      const { data } = await api.get("/campaigns");
+      const response = await api.get("/campaigns");
 
-      const campaigns = Array.isArray(data)
-        ? data
+      const campaigns = Array.isArray(
+        response.data?.data
+      )
+        ? response.data.data
         : [];
 
       return campaigns.map(campaignMapper);

@@ -156,10 +156,12 @@ import useMeetingAlert from "../hooks/queries/useMeetingAlert";
 
 export default function MeetingAlert() {
   const {
-    data: alert,
-    isLoading,
-    isError,
-  } = useMeetingAlert();
+  data: response,
+  isLoading,
+  isError,
+} = useMeetingAlert();
+
+const alert = response?.data;
 
   const handleOpenBrief = () => {
     console.log("Open Brief clicked");

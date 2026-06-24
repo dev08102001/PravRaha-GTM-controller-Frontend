@@ -1,133 +1,74 @@
 import { useEffect, useState } from "react";
-// import api from "../../services/api";
 import { getSettings } from "../../services/settingsService";
- 
-/*
- * TEMPORARY MOCK SETTINGS
- * ------------------------------------------------------------
- * Backend currently returns:
- * {
- *   success: true,
- *   data: null
- * }
- *
- * Until the Settings API is fully implemented,
- * use this mock data so the UI can be developed
- * and tested without backend dependency.
- *
 
- * Remove MOCK_SETTINGS once the backend starts
- * returning actual settings data.
- */
-const MOCK_SETTINGS = {
-  integrations: [
-    {
-      _id: 1,
-      name: "Apollo.io",
-      desc: "Contact enrichment layer 1",
-      status: "CONNECTED",
-    },
-    {
-      _id: 2,
-      name: "Clay",
-      desc: "Enrichment layer 2",
-      status: "CONNECTED",
-    },
-    {
-      _id: 3,
-      name: "Drup",
-      desc: "Buying intelligence",
-      status: "CONNECTED",
-    },
-  ],
- 
-  preferences: [
-    {
-      _id: 1,
-      label: "Auto approve messages",
-      enabled: true,
-    },
-    {
-      _id: 2,
-      label: "Human review required",
-      enabled: false,
-    },
-  ],
- 
-  teamMembers: [
-    {
-      _id: 1,
-      name: "Pankaj Kumar",
-      email: "pankaj@pravraha.com",
-      role: "ADMIN",
-    },
-  ],
- 
+const DEFAULT_SETTINGS = {
+  integrations: [],
+  preferences: [],
+  teamMembers: [],
   emailInfrastructure: {
-    sendGridConnected: "ACTIVE",
-    domainWarming: "COMPLETE",
-    dailySendLimit: "1500/day",
-    healthScore: 95,
+    sendGridConnected: "",
+    domainWarming: "",
+    dailySendLimit: "",
+    healthScore: 0,
   },
 };
- 
+
 export default function useSettings() {
   const [loading, setLoading] = useState(true);
- 
-  const [settings, setSettings] = useState({
-    integrations: [],
-    preferences: [],
-    teamMembers: [],
-    emailInfrastructure: {
-      sendGridConnected: "",
-      domainWarming: "",
-      dailySendLimit: "",
-      healthScore: 0,
-    },
-  });
- 
+
+  const [settings, setSettings] =
+    useState(DEFAULT_SETTINGS);
+
   useEffect(() => {
     fetchSettings();
   }, []);
- 
+
   const fetchSettings = async () => {
     try {
-      // const response = await api.get("/settings");
- 
-      // console.log("SETTINGS API RESPONSE:", response.data);
- 
-      // if (response.data?.success) {
-      // //   /*
-      // //    * If backend returns actual settings,
-      // //    * use them.
-      // //    *
-      // //    * Otherwise use temporary mock data.
-      // //    */
-      //   setSettings(response.data.data || MOCK_SETTINGS);
-      // }
-    const response = await getSettings();
+      setLoading(true);
 
-    if (response?.success) {
-      setSettings(response.data ?? MOCK_SETTINGS);
-    } else {
-      setSettings(MOCK_SETTINGS);
-    }
+      const response =
+        await getSettings();
+
+      if (
+        response?.success &&
+        response?.data
+      ) {
+        setSettings({
+          integrations:
+            response.data.integrations || [],
+          preferences:
+            response.data.preferences || [],
+          teamMembers:
+            response.data.teamMembers || [],
+          emailInfrastructure:
+            response.data
+              .emailInfrastructure || {
+              sendGridConnected: "",
+              domainWarming: "",
+              dailySendLimit: "",
+              healthScore: 0,
+            },
+        });
+      } else {
+        setSettings(DEFAULT_SETTINGS);
+      }
     } catch (error) {
-      console.error("Settings Fetch Error:", error);
- 
-      /*
-       * Fallback to mock data if API fails.
-       * Allows UI development to continue.
-       */
-      setSettings(MOCK_SETTINGS);
+      console.error(
+        "Settings Fetch Error:",
+        error
+      );
+
+      setSettings(DEFAULT_SETTINGS);
     } finally {
       setLoading(false);
     }
   };
- 
+
   return {
     loading,
     settings,
+    setSettings,
     refetch: fetchSettings,
   };
 }

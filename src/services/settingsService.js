@@ -24,3 +24,8 @@ export const updateEmailInfrastructure = async (payload) => {
   const { data } = await api.put("/settings/email-infrastructure", payload);
   return data;
 };
+
+export const saveSettings = async (payload) => {
+  const { data } = await api.post("/settings", payload);
+  return data;
+};

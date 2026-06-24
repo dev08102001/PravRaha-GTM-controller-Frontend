@@ -104,6 +104,8 @@ import ProtectedRoute from "../components/ProtectedRoute";
  
 import Login from "../pages/Login";
 import Signup from "../pages/Signup";
+import Users from "../pages/Users";
+import Leads from "../pages/Leads";
  
 // NEW IMPORTS
 import ForgotPassword from "../pages/ForgotPassword";
@@ -119,7 +121,8 @@ import Signals from "../pages/Signals";
 import Analytics from "../pages/Analytics";
 import ICPConfig from "../pages/ICPConfig";
 import Settings from "../pages/Settings";
- 
+import Customers from "../pages/Customers";
+
 export default function AppRoutes() {
   return (
     <Routes>
@@ -159,6 +162,11 @@ export default function AppRoutes() {
           element={<Campaigns />}
       />
 
+      <Route
+        path="/leads"
+        element={<Leads />}
+      />
+
         <Route
           path="/campaigns/:id"
           element={<CampaignDetails />}
@@ -186,17 +194,57 @@ export default function AppRoutes() {
  
         <Route
           path="/analytics"
-          element={<Analytics />}
-        />
+          element={
+          <ProtectedRoute
+            roles={[
+            "admin",
+            "manager",
+          ]}
+        >
+          <Analytics />
+        </ProtectedRoute>
+      }
+    />
  
         <Route
           path="/icp"
-          element={<ICPConfig />}
-        />
+          element={
+            <ProtectedRoute
+            roles={["admin"]}
+          >
+            <ICPConfig />
+          </ProtectedRoute>
+        }
+      />
  
         <Route
           path="/settings"
           element={<Settings />}
+        />
+
+        <Route
+          path="/users"
+          element={
+            <ProtectedRoute
+              roles={[
+                "admin",
+                "manager",
+              ]}
+            >
+            <Users />
+          </ProtectedRoute>
+        }
+      />
+
+        <Route
+          path="/customers"
+          element={
+            <ProtectedRoute
+              roles={["admin"]}
+            >
+              <Customers />
+            </ProtectedRoute>
+          }
         />
  
       </Route>
