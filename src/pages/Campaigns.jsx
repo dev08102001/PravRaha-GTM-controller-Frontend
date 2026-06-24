@@ -244,6 +244,12 @@ import useCampaigns from "../hooks/queries/useCampaigns";
 import NewCampaignModal from "../components/NewCampaignModal";
 
 export default function Campaigns() {
+  const currentUser = JSON.parse(
+    localStorage.getItem("user") || "{}"
+  );
+
+  const currentRole =
+    currentUser.role?.toLowerCase();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState(null);
 
@@ -256,23 +262,23 @@ export default function Campaigns() {
   } = useCampaigns();
 
   const runningCount = campaigns.filter(
-    (c) => c.status === "RUNNING"
-  ).length;
+  (c) => c.status === "running"
+).length;
 
-  const pausedCount = campaigns.filter(
-    (c) => c.status === "PAUSED"
-  ).length;
+const pausedCount = campaigns.filter(
+  (c) => c.status === "paused"
+).length;
 
-  const completedCount = campaigns.filter(
-    (c) => c.status === "COMPLETED"
-  ).length;
+const completedCount = campaigns.filter(
+  (c) => c.status === "completed"
+).length;
 
   // Button Handlers
   const handlePauseResume = async (campaign) => {
   const newStatus =
-    campaign.status === "RUNNING"
-      ? "PAUSED"
-      : "RUNNING";
+  campaign.status === "running"
+    ? "paused"
+    : "running";
 
   try {
     await api.patch(`/campaigns/${campaign._id}/status`, {
@@ -351,15 +357,17 @@ export default function Campaigns() {
           </p>
         </div>
 
+      {currentRole !== "user" && (
         <button
           onClick={() => {
             setEditingCampaign(null);
             setIsModalOpen(true);
-        }}
-        className="bg-pink-500 hover:bg-pink-600 px-6 py-3 rounded-xl font-semibold text-white shadow-lg transition"
-      >
-        + New Campaign
-      </button>
+          }}
+          className="bg-pink-500 hover:bg-pink-600 px-6 py-3 rounded-xl font-semibold text-white shadow-lg transition"
+        >
+          + New Campaign
+        </button>
+      )}
       </div>
 
       {/* Empty State */}
@@ -395,39 +403,45 @@ export default function Campaigns() {
 
             <div className="flex gap-3 flex-wrap">
             <button
-              className={`px-4 py-2 rounded-lg text-xs font-bold ${
-                campaign.status === "RUNNING"
-                  ? "bg-green-500/20 text-green-400"
-                  : campaign.status === "PAUSED"
-                  ? "bg-yellow-500/20 text-yellow-400"
-                  : "bg-blue-500/20 text-blue-400"
-              }`}
+          className={`px-4 py-2 rounded-lg text-xs font-bold ${
+  campaign.status === "running"
+    ? "bg-green-500/20 text-green-400"
+    : campaign.status === "paused"
+    ? "bg-yellow-500/20 text-yellow-400"
+    : "bg-blue-500/20 text-blue-400"
+}`}
             >
-              {campaign.status}
+              {campaign.status?.toUpperCase()}
             </button>
 
-              <button
-                onClick={() => handlePauseResume(campaign)}
-                className="bg-[#24304A] hover:bg-[#30405F] px-4 py-2 rounded-lg"
-              >
-                {campaign.status === "RUNNING"
-                  ? "❚❚ Pause"
-                  : "▶ Resume"}
-              </button>
+              {currentRole !== "user" && (
+                <button
+                  onClick={() => handlePauseResume(campaign)}
+                  className="bg-[#24304A] hover:bg-[#30405F] px-4 py-2 rounded-lg"
+                >
+                  {campaign.status === "running"
+  ? "❚❚ Pause"
+  : "▶ Resume"}
+                </button>
+              )}
 
-              <button
-                onClick={() => handleEdit(campaign)}
-                className="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg text-white"
-              >
-                ✏️ Edit
-              </button>
+                  {currentRole !== "user" && (
+                    <button
+                      onClick={() => handleEdit(campaign)}
+                      className="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg text-white"
+                    >
+                    ✏️ Edit
+                   </button>
+                  )}
 
-              <button
-                onClick={() => handleDelete(campaign)}
-                className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg text-white"
-              >
-                🗑 Delete
-              </button>
+                  {currentRole === "admin" && (
+                    <button
+                      onClick={() => handleDelete(campaign)}
+                      className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg text-white"
+                   >
+                    🗑 Delete
+                  </button>
+                  )}
 
               <button
                 onClick={() => handleDetails(campaign)}
@@ -534,10 +548,11 @@ export default function Campaigns() {
         </div>
       ))}
 
-    <NewCampaignModal
-      isOpen={isModalOpen}
-      campaign={editingCampaign}
-      onClose={() => {
+      {currentRole !== "user" && (
+  <NewCampaignModal
+    isOpen={isModalOpen}
+    campaign={editingCampaign}
+    onClose={() => {
       setEditingCampaign(null);
       setIsModalOpen(false);
     }}
@@ -550,6 +565,7 @@ export default function Campaigns() {
       });
     }}
   />
+)}
     </div>
   );
 }

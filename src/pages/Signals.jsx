@@ -545,16 +545,47 @@ export default function Signals() {
   ==========================================================
   */
  
-  const { data: companies = [] } = useCompanies();
+  // const { data: companies = [] } = useCompanies();
+
+  // const [selectedFilter, setSelectedFilter] = useState("All");
  
+  // const filteredCompanies =
+  // selectedFilter === "All"
+  //   ? companies
+  //   : companies.filter(
+  //       (company) => company.signal === selectedFilter
+  //     );
+
+  const {
+    data: companies = [],
+    isLoading,
+    isError,
+  } = useCompanies();
+
   const [selectedFilter, setSelectedFilter] = useState("All");
- 
+
+  if (isLoading) {
+    return (
+      <div className="bg-[#151D2E] rounded-2xl p-6">
+      Loading signals...
+    </div>
+  );
+}
+
+if (isError) {
+  return (
+    <div className="bg-[#151D2E] rounded-2xl p-6 text-red-400">
+      Failed to load signals.
+    </div>
+  );
+}
+
   const filteredCompanies =
-  selectedFilter === "All"
-    ? companies
-    : companies.filter(
-        (company) => company.signal === selectedFilter
-      );
+    selectedFilter === "All"
+      ? companies
+      : companies.filter(
+          (company) => company.signal === selectedFilter
+        );
  
  
  // ***************************CHANGE*************************
@@ -770,11 +801,17 @@ export default function Signals() {
   </button>
  
 </div>
+
+  {filteredCompanies.length === 0 && (
+    <div className="bg-[#151D2E] rounded-2xl p-6 text-center text-gray-400">
+     No signals found.
+  </div>
+)}
  
  
-{filteredCompanies.map((company, ) => (
+{filteredCompanies.map((company) => (
   <div
-    key={company._id}
+    key={company._id || company.name}
     className="bg-gradient-to-br from-[#1A2340] to-[#151D2E] border border-slate-700 rounded-2xl p-6 flex justify-between items-center"
   >
     {/* =====================================================

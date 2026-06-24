@@ -302,10 +302,10 @@
 
 
 
-
 import React, { useState, useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../services/api";
+import { getCustomers } from "../services/customerService";
 
 // --- Inline Icons ---
 const CheckIcon = ({ className }) => (
@@ -429,6 +429,28 @@ const AgentChip = ({ label, selected, onClick }) => (
 
   const [campaignName, setCampaignName] = useState("");
   const [goal, setGoal] = useState("");
+  const [customers, setCustomers] =
+    useState([]);
+  const [users, setUsers] =
+    useState([]);
+
+  const [assignedUsers, setAssignedUsers] =
+    useState([]);
+
+  const [customerId, setCustomerId] =
+   useState("");
+    let currentUser = {};
+
+try {
+  currentUser = JSON.parse(
+    localStorage.getItem("user") || "{}"
+  );
+} catch {
+  currentUser = {};
+}
+
+  const currentRole =
+    currentUser.role?.toLowerCase();
   const [channels, setChannels] = useState(["Email", "LinkedIn"]);
 
   const [agents, setAgents] = useState([
@@ -444,71 +466,146 @@ const AgentChip = ({ label, selected, onClick }) => (
 
   const queryClient = useQueryClient();
 
-  const mutation = useMutation({
-    mutationFn: async (payload) => {
-  if (campaign) {
-    const { data } = await api.put(
-      `/campaigns/${campaign._id}`,
+const mutation = useMutation({
+  mutationFn: async (payload) => {
+    if (campaign) {
+      
+      const { data } = await api.put(
+        `/campaigns/${campaign._id}`,
+        payload
+      );
+      return data;
+    }
+
+    const { data } = await api.post(
+      "/campaigns",
       payload
     );
+
     return data;
-  }
+  },
 
-  const { data } = await api.post("/campaigns", payload);
-  return data;
-},
+  onSuccess: async () => {
+    await queryClient.invalidateQueries({
+      queryKey: ["campaigns"],
+    });
 
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["campaigns"],
-      });
+    alert(
+      campaign
+        ? "Campaign updated successfully"
+        : "Campaign launched successfully"
+    );
 
-      alert(
-        campaign
-          ? "Campaign updated successfully"
-          : "Campaign launched successfully"
-        );
-      onSuccess();
-    },
-    onError: (error) => {
-      console.error("Failed to launch campaign:", error);
-      alert(
-        error?.message ||
-          "Failed to launch campaign. Please try again."
-      );
-    },
-  });
+    onSuccess();
+  },
+
+  onError: (error) => {
+    console.error(error);
+
+    alert(
+      error?.response?.data?.message ||
+      error?.message ||
+      "Failed to launch campaign"
+    );
+  },
+});
 
   // Close on ESC key press
-  useEffect(() => {
-    const handleEsc = (event) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", handleEsc);
-    return () => {
-      window.removeEventListener("keydown", handleEsc);
-    };
-  }, [onClose]);
+  // Load Customers
+useEffect(() => {
+  const loadCustomers = async () => {
+  try {
+    const usersResponse =
+      await api.get("/users");
 
+    if (
+      usersResponse?.data?.success
+    ) {
+      setUsers(
+        usersResponse.data.data || []
+      );
+    }
+
+    if (currentRole === "admin") {
+      const response =
+        await getCustomers();
+
+      if (response?.success) {
+        setCustomers(
+          response.data || []
+        );
+      }
+    }
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+  if (
+  currentRole === "admin" ||
+  currentRole === "manager"
+) {
+  loadCustomers();
+}
+}, [currentRole]);
+
+// Close Modal on ESC
+useEffect(() => {
+  const handleEsc = (event) => {
+    if (event.key === "Escape") {
+      onClose();
+    }
+  };
+
+  window.addEventListener(
+    "keydown",
+    handleEsc
+  );
+
+  return () => {
+    window.removeEventListener(
+      "keydown",
+      handleEsc
+    );
+  };
+}, [onClose]);
   // Reset form on close
   useEffect(() => {
-  if (campaign) {
-    setCampaignName(campaign.title || "");
-    setGoal(campaign.goal || "");
-    setChannels(campaign.channels || ["Email", "LinkedIn"]);
-    setAgents(
-      campaign.agents || [
-        "Market Scanner",
-        "Account Research",
-        "Buyer Discovery",
-        "Messaging",
-        "Campaign Exec",
-        "Pipeline Opt",
-      ]
-    );
+    if (campaign) {
+  setCampaignName(campaign.title || "");
+  setGoal(campaign.goal || "");
+  setAssignedUsers(
+  campaign.assignedUsers?.map(
+    (user) => user._id || user
+  ) || []
+);
+
+  setCustomerId(
+    campaign.customerId?._id ||
+    campaign.customerId ||
+    ""
+  );
+
+  setChannels(
+    campaign.channels || [
+      "Email",
+      "LinkedIn",
+    ]
+  );
+
+  setAgents(
+    campaign.agents || [
+      "Market Scanner",
+      "Account Research",
+      "Buyer Discovery",
+      "Messaging",
+      "Campaign Exec",
+      "Pipeline Opt",
+    ]
+  );
   } else if (isOpen) {
+    setAssignedUsers([]);
+    setCustomerId("");
     setCampaignName("");
     setGoal("");
     setChannels(["Email", "LinkedIn"]);
@@ -531,36 +628,50 @@ const AgentChip = ({ label, selected, onClick }) => (
     );
   };
 
-  const handleLaunchCampaign = () => {
-    if (!campaignName.trim() || !goal.trim()) {
-      alert("Please fill in Campaign Name and Goal.");
-      return;
-    }
+const handleLaunchCampaign = () => {
+  if (
+    !campaignName.trim() ||
+    !goal.trim()
+  ) {
+    alert(
+      "Please fill in Campaign Name and Goal"
+    );
+    return;
+  }
 
-  const payload = {
-    title: campaignName,
-    goal,
-    channels,
-    agents,
+  if (
+    currentRole === "admin" &&
+    !customerId
+  ) {
+    alert("Select Customer");
+    return;
+  }
 
-    status: "RUNNING",
+let selectedCustomerId;
 
-    companies: 0,
-    buyersFound: 0,
-    msgsGenerated: 0,
-    msgsSent: 0,
-    replies: 0,
-    meetings: 0,
+if (currentRole === "admin") {
+  selectedCustomerId = customerId;
+} else {
+  selectedCustomerId =
+    currentUser.customerId?._id ||
+    currentUser.customerId;
+}
+const payload = {
+  title: campaignName,
+  goal,
+  channels,
+  agents,
+  assignedUsers,
+  status:
+    campaign?.status || "running",
+};
 
-    progress: 0,
+if (!campaign) {
+  payload.customerId = selectedCustomerId;
+}
 
-    started: new Date().toLocaleDateString(),
-
-    createdAt: new Date().toISOString(),
-  };
-
-    mutation.mutate(payload);
-  };
+  mutation.mutate(payload);
+};
 
   if (!isOpen) return null;
 
@@ -611,7 +722,34 @@ const AgentChip = ({ label, selected, onClick }) => (
               className="w-full bg-[#1C2538] border border-gray-700 rounded-lg p-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#FF5A7A]"
             />
           </div>
+        {currentRole === "admin" && (
+  <div>
+    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">
+      Customer
+    </label>
 
+    <select
+      value={customerId}
+      onChange={(e) =>
+        setCustomerId(e.target.value)
+      }
+      className="w-full bg-[#1C2538] border border-gray-700 rounded-lg p-3 text-white"
+    >
+      <option value="">
+        Select Customer
+      </option>
+
+      {customers.map((customer) => (
+        <option
+          key={customer._id}
+          value={customer._id}
+        >
+          {customer.companyName}
+        </option>
+      ))}
+    </select>
+  </div>
+)}
           {/* Goal */}
           <div>
             <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Goal (Natural Language)</label>
@@ -654,6 +792,52 @@ const AgentChip = ({ label, selected, onClick }) => (
               ))}
             </div>
           </div>
+        {/* Assigned Users */}
+<div>
+  <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 block">
+    Assign Users
+  </label>
+
+  <div className="grid grid-cols-2 gap-3">
+    {users
+      .filter(
+        (user) =>
+          user.role?.toLowerCase() ===
+          "user"
+      )
+      .map((user) => (
+        <label
+          key={user._id}
+          className="flex items-center gap-2 text-white"
+        >
+          <input
+            type="checkbox"
+            checked={assignedUsers.includes(
+              user._id
+            )}
+            onChange={(e) => {
+              if (e.target.checked) {
+                setAssignedUsers([
+                  ...assignedUsers,
+                  user._id,
+                ]);
+              } else {
+                setAssignedUsers(
+                  assignedUsers.filter(
+                    (id) =>
+                      id !== user._id
+                  )
+                );
+              }
+            }}
+          />
+
+          {user.firstName}{" "}
+          {user.lastName}
+        </label>
+      ))}
+  </div>
+</div>
         </div>
 
         {/* Footer */}

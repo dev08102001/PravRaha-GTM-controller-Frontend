@@ -2,6 +2,7 @@ import {useQuery,useMutation,useQueryClient,} from "@tanstack/react-query";
 
 import {getICP,getICPConfig,saveICP,} from "../../services/icpService";
 
+
 export const useICP = () => {
   return useQuery({
     queryKey: ["icp"],

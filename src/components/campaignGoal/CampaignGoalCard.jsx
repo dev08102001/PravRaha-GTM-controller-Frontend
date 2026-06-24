@@ -8,6 +8,10 @@ export default function CampaignGoalCard() {
   const [goal, setGoal] = useState("");
 
   const handleCreate = async () => {
+    if (!goal.trim()) {
+  alert("Please enter a campaign goal");
+  return;
+}
 
     try {
 
@@ -22,8 +26,13 @@ export default function CampaignGoalCard() {
       alert("Campaign Created");
 
     } catch (error) {
-      console.log(error);
-    }
+  console.error(error);
+
+  alert(
+    error?.response?.data?.message ||
+    "Failed to create campaign"
+  );
+}
   };
 
   return (
