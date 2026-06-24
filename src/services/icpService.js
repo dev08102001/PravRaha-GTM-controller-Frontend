@@ -1,18 +1,16 @@
 import api from "./api";
 
-export const getICP = () =>
-  api.get("/icp");
+export const getICP = async () => {
+  const res = await api.get("/icp");
+  return res.data.data;
+};
 
-export const saveICP = (
-  data
-) =>
-  api.post(
-    "/icp",
-    data
-  );
+export const getICPConfig = async () => {
+  const res = await api.get("/icp-config");
+  return res.data.data.sections || [];
+};
 
-export const getICPConfig =
-  () =>
-    api.get(
-      "/icp-config"
-    );
+export const saveICP = async (payload) => {
+  const res = await api.post("/icp", payload);
+  return res.data;
+};
