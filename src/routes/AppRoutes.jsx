@@ -197,8 +197,8 @@ export default function AppRoutes() {
           element={
           <ProtectedRoute
             roles={[
+            "super_admin",
             "admin",
-            "manager",
           ]}
         >
           <Analytics />
@@ -210,7 +210,7 @@ export default function AppRoutes() {
           path="/icp"
           element={
             <ProtectedRoute
-            roles={["admin"]}
+            roles={["super_admin"]}
           >
             <ICPConfig />
           </ProtectedRoute>
@@ -227,8 +227,8 @@ export default function AppRoutes() {
           element={
             <ProtectedRoute
               roles={[
+                "super_admin",
                 "admin",
-                "manager",
               ]}
             >
             <Users />
@@ -240,7 +240,7 @@ export default function AppRoutes() {
           path="/customers"
           element={
             <ProtectedRoute
-              roles={["admin"]}
+              roles={["super_admin"]}
             >
               <Customers />
             </ProtectedRoute>

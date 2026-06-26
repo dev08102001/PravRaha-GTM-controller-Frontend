@@ -68,13 +68,18 @@ export default function KpiCards({
 
   let cards = [];
 
-  if (role === "admin") {
+  if (role === "super_admin") {
     cards = [
       {
         id: "customers",
         title: "Customers",
         value:
           analytics.customers || 0,
+      },
+      {
+        id: "admins",
+        title: "Admins",
+        value: analytics.admins || 0,
       },
       {
         id: "users",
@@ -107,7 +112,7 @@ export default function KpiCards({
           analytics.replies || 0,
       },
     ];
-  } else if (role === "manager") {
+  } else if (role === "admin") {
     cards = [
       {
         id: "users",

@@ -180,7 +180,7 @@ export default function Analytics() {
           Analytics Overview
         </h2>
 
-        {currentRole === "admin" && (
+        {currentRole === "super_admin" && (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
             <div>
               <p className="text-gray-400">
@@ -193,10 +193,10 @@ export default function Analytics() {
 
             <div>
               <p className="text-gray-400">
-                Managers
+                Admins
               </p>
               <p className="text-3xl font-bold text-white">
-                {analytics.managers || 0}
+                {analytics.admins || 0}
               </p>
             </div>
 
@@ -238,7 +238,7 @@ export default function Analytics() {
           </div>
         )}
 
-        {currentRole === "manager" && (
+        {currentRole === "admin" && (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
             <div>
               <p className="text-gray-400">

@@ -52,7 +52,7 @@ export default function Users() {
   useEffect(() => {
   fetchUsers();
 
-  if (currentRole === "admin") {
+  if (currentRole === "super_admin") {
     fetchCustomers();
   }
 }, [currentRole]);
@@ -100,9 +100,8 @@ const handleCreateUser = async (e) => {
   try {
     let payload = { ...formData };
 
-    if (currentRole === "manager") {
-      delete payload.role;
-      delete payload.customerId;
+    if (currentRole === "admin") {
+      payload.role = "user";
     }
 
   const response =
@@ -228,10 +227,10 @@ const updateRole = async (userId, role) => {
 
   const getRoleClass = (role) => {
     switch (role?.toLowerCase()) {
-      case "admin":
+      case "super_admin":
         return "bg-red-500/20 text-red-400";
 
-      case "manager":
+      case "admin":
         return "bg-yellow-500/20 text-yellow-400";
 
       case "user":
@@ -329,7 +328,7 @@ const updateRole = async (userId, role) => {
                 </td>
 
                 <td className="p-4">
-                  {currentRole === "admin" ? (
+                  {currentRole === "super_admin" ? (
                     <select
                       value={user.role || "user"}
                       disabled={
@@ -346,12 +345,12 @@ const updateRole = async (userId, role) => {
                         user.role
                       )}`}
                     >
-                      <option value="admin">
-                        ADMIN
+                      <option value="super_admin">
+                        SUPER ADMIN
                       </option>
 
-                      <option value="manager">
-                         MANAGER
+                      <option value="admin">
+                        ADMIN
                       </option>
 
                       <option value="user">
@@ -364,15 +363,19 @@ const updateRole = async (userId, role) => {
                         user.role
                       )}`}
                     >
-                      {user.role?.toUpperCase()}
+                      {user.role === "super_admin"
+                        ? "SUPER ADMIN"
+                        : user.role === "admin"
+                        ? "ADMIN"
+                        : "USER"}
                     </span>
                   )}
                 </td>
 
                   <td className="p-4">
-                    {(currentRole === "admin" ||
+                    {(currentRole === "super_admin" ||
 
-                      (currentRole === "manager" &&
+                      (currentRole === "admin" &&
                       (
                         currentUser._id === user._id ||
                         (
@@ -540,7 +543,7 @@ const updateRole = async (userId, role) => {
           className="w-full p-3 bg-[#0E1422] border border-slate-700 rounded-lg"
         />
 
-        {currentRole === "admin" && (
+        {currentRole === "super_admin" && (
           <>
             <select
               name="role"
@@ -552,16 +555,16 @@ const updateRole = async (userId, role) => {
                 User
               </option>
 
-              <option value="manager">
-                Manager
+              <option value="admin">
+                ADMIN
               </option>
 
-              <option value="admin">
-                Admin
+              <option value="super_admin">
+                SUPER ADMIN
               </option>
             </select>
 
-            {formData.role !== "admin" && (
+            {formData.role !== "super_admin" && (
               <select
                 name="customerId"
                 value={formData.customerId}
