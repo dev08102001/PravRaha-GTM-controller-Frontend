@@ -43,7 +43,7 @@ export default function AgentPreferencesCard({
   setSettings,
   role,
 }) {
-  const isAdmin = role === "admin";
+  const isAdmin = role === "super_admin";
 
   const handleToggle = (index) => {
     if (!isAdmin) return;

@@ -246,7 +246,7 @@ export default function Sidebar() {
 {
   title: "CONFIGURATION",
   items: [
-    ...(role === "admin"
+    ...(role === "super_admin"
       ? [
           {
             name: "Customers",
@@ -255,8 +255,8 @@ export default function Sidebar() {
         ]
       : []),
 
-    ...(role === "admin" ||
-    role === "manager"
+    ...(role === "super_admin" ||
+    role === "admin"
       ? [
           {
             name: "Users",
@@ -265,7 +265,7 @@ export default function Sidebar() {
         ]
       : []),
 
-        ...(role === "admin"
+        ...(role === "super_admin"
   ? [
       {
         name: "ICP Config",
@@ -371,9 +371,12 @@ export default function Sidebar() {
         </div>
 
         <div className="text-sm text-gray-400 mb-3">
-          {user?.role?.toUpperCase()}
-        </div>
-
+          {user?.role === "super_admin"
+          ? "SUPER ADMIN"
+          : user?.role === "admin"
+          ? "ADMIN"
+          : "USER"}
+      </div>
         <button
           onClick={handleLogout}
           className="w-full bg-red-500 hover:bg-red-600 py-2 rounded-lg text-white font-medium transition"

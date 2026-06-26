@@ -49,8 +49,8 @@ export default function IntegrationsCard({
   role,
 }) {
   const canEdit =
+    role === "super_admin" ||
     role === "admin" ||
-    role === "manager" ||
     role === "user";
 
   const handleToggle = (

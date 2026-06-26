@@ -636,8 +636,8 @@ export default function Settings() {
    * Other users only see integrations assigned to them.
    */
   const allowedIntegrations =
-  role === "admin" ||
-  role === "manager"
+  role === "super_admin" ||
+  role === "admin"
     ? settings?.integrations || []
     : (settings?.integrations || []).filter(
         (item) =>
@@ -696,8 +696,8 @@ export default function Settings() {
         />
 
         {/* Team Access - Admin & Manager Only */}
-        {(role === "admin" ||
-          role === "manager") && (
+        {(role === "super_admin" ||
+          role === "admin") && (
           <TeamAccessCard
             teamMembers={settings?.teamMembers || []}
           />
@@ -705,7 +705,7 @@ export default function Settings() {
       </div>
 
       {/* Email Infrastructure - Admin Only */}
-        {role === "admin" && (
+        {role === "super_admin" && (
   <EmailInfrastructureCard
     emailInfrastructure={
       settings?.emailInfrastructure || {}
@@ -714,7 +714,7 @@ export default function Settings() {
 )}
 
       {/* Save Button - Admin Only */}
-      {["admin", "manager", "user"].includes(role) && (
+      {["super_admin", "admin", "user"].includes(role) && (
         <div className="flex justify-end">
           <button
             onClick={handleSave}

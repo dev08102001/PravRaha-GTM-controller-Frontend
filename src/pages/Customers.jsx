@@ -32,7 +32,7 @@ export default function Customers() {
   useEffect(() => {
     fetchCustomers();
 
-    if (currentRole === "admin") {
+    if (currentRole === "super_admin") {
       fetchManagers();
     }
   }, []);
@@ -63,7 +63,7 @@ export default function Customers() {
         response.data.filter(
           (user) =>
             user.role?.toLowerCase() ===
-            "manager"
+            "admin"
         );
 
       setManagers(managerUsers);
@@ -202,7 +202,7 @@ export default function Customers() {
           Customers Management
         </h1>
 
-      {currentRole === "admin" && (
+      {currentRole === "super_admin" && (
         <button
           onClick={() =>
             setShowModal(true)
@@ -277,7 +277,7 @@ export default function Customers() {
                   </td>
 
                 <td className="p-4">
-                  {currentRole === "admin" ? (
+                  {currentRole === "super_admin" ? (
                     <select
                       value={
                         customer.managerId?._id || ""
@@ -319,7 +319,7 @@ export default function Customers() {
                   </td>
 
                   <td className="p-4">
-                    {currentRole === "admin" && (
+                    {currentRole === "super_admin" && (
                       <button
                         onClick={() =>
                           handleDeleteCustomer(
