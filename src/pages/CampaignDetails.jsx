@@ -144,6 +144,110 @@ export default function CampaignDetails() {
 
       </div>
 
+      {/* Prompt + AI Response (grounded on database) */}
+
+      {(campaign.prompt || campaign.response) && (
+        <div className="bg-[#151D2E] rounded-2xl p-6 space-y-5">
+          <h2 className="text-2xl font-bold text-white">
+            Prompt &amp; AI Response
+          </h2>
+
+          {campaign.prompt && (
+            <div>
+              <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">
+                Prompt
+              </p>
+              <p className="text-gray-200">
+                {campaign.prompt}
+              </p>
+            </div>
+          )}
+
+          {campaign.response?.summary && (
+            <div>
+              <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">
+                Summary
+              </p>
+              <p className="text-gray-200">
+                {campaign.response.summary}
+              </p>
+            </div>
+          )}
+
+          {Array.isArray(campaign.response?.insights) &&
+            campaign.response.insights.length > 0 && (
+              <div>
+                <p className="text-xs uppercase tracking-wide text-gray-500 mb-2">
+                  Insights
+                </p>
+                <ul className="list-disc list-inside space-y-2 text-gray-200">
+                  {campaign.response.insights.map((insight, idx) => (
+                    <li key={idx}>{insight}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+          {campaign.metadata && (
+            <p className="text-xs text-gray-500">
+              Source: {campaign.metadata.source || "database"} •{" "}
+              {campaign.metadata.dataUsed ?? 0} records used
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Retrieved data (context used by the AI) */}
+
+      {Array.isArray(campaign.retrievedContext) &&
+        campaign.retrievedContext.length > 0 && (
+          <div className="bg-[#151D2E] rounded-2xl p-6">
+            <h2 className="text-2xl font-bold text-white mb-4">
+              Retrieved Data ({campaign.retrievedContext.length})
+            </h2>
+
+            <div className="space-y-3 max-h-[420px] overflow-y-auto pr-2">
+              {campaign.retrievedContext.map((row, idx) => (
+                <div
+                  key={idx}
+                  className="bg-[#0F1726] border border-slate-700 rounded-xl p-4"
+                >
+                  <div className="flex justify-between flex-wrap gap-2">
+                    <span className="font-semibold text-white">
+                      {row.name || row.domain || `Record ${idx + 1}`}
+                    </span>
+                    {row.industry && (
+                      <span className="text-xs text-gray-400">
+                        {row.industry}
+                      </span>
+                    )}
+                  </div>
+
+                  {row.employees && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Employees: {row.employees}
+                    </p>
+                  )}
+
+                  {Array.isArray(row.signals) &&
+                    row.signals.length > 0 && (
+                      <ul className="list-disc list-inside mt-2 text-sm text-gray-300 space-y-1">
+                        {row.signals.map((s, i) => (
+                          <li key={i}>
+                            <span className="text-pink-400">
+                              {s.type || "signal"}
+                            </span>{" "}
+                            {s.summary}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
       {/* Information */}
 
       <div className="bg-[#151D2E] rounded-2xl p-6">

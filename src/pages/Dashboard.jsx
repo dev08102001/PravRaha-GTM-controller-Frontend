@@ -39,7 +39,6 @@
 
 import useAnalytics from "../hooks/queries/useAnalytics";
 
-import MeetingAlert from "../components/MeetingAlert";
 import PipelineFunnel from "../components/PipelineFunnel";
 import TopCompanies from "../components/TopCompanies";
 import LiveSignalFeed from "../components/LiveSignalFeed";
@@ -190,12 +189,6 @@ export default function Dashboard() {
           </>
         )}
       </div>
-
-      {/* -------------------------------- */}
-      {/* ALERTS */}
-      {/* -------------------------------- */}
-
-      <MeetingAlert />
 
       {/* -------------------------------- */}
       {/* CAMPAIGN GOAL */}

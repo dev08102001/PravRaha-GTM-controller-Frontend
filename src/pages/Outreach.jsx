@@ -182,6 +182,7 @@
 // }
 
 
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import useOutreach from "../hooks/queries/useOutreach";
@@ -189,6 +190,7 @@ import useOutreach from "../hooks/queries/useOutreach";
 import {
   approveOutreachMessage,
   rejectOutreachMessage,
+  updateOutreachMessage,
 } from "../services/outreachService";
 
 export default function Outreach() {
@@ -199,6 +201,11 @@ const {
   isLoading,
   isError,
 } = useOutreach();
+
+const [editingId, setEditingId] = useState(null);
+const [editSubject, setEditSubject] = useState("");
+const [editBody, setEditBody] = useState("");
+const [saving, setSaving] = useState(false);
 
 const approveMessage = async (id) => {
   try {
@@ -243,8 +250,37 @@ const approveAllMessages = async () => {
   }
 };
 
-  const editMessage = (msg) => {
-    alert(`Edit message for ${msg.name}`);
+  const startEdit = (msg) => {
+    setEditingId(msg._id);
+    setEditSubject(msg.subject || "");
+    setEditBody(msg.body || "");
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditSubject("");
+    setEditBody("");
+  };
+
+  const saveEdit = async (id) => {
+    try {
+      setSaving(true);
+      await updateOutreachMessage(id, {
+        subject: editSubject,
+        body: editBody,
+      });
+
+      await queryClient.invalidateQueries({
+        queryKey: ["outreach"],
+      });
+
+      cancelEdit();
+    } catch (error) {
+      console.error(error);
+      alert("Failed to save message");
+    } finally {
+      setSaving(false);
+    }
   };
 
    if (isLoading){
@@ -333,15 +369,32 @@ const approveAllMessages = async () => {
               SUBJECT:
             </h3>
 
-            <div className="font-semibold tracking-wide">
-              {msg.subject}
-            </div>
+            {editingId === msg._id ? (
+              <input
+                value={editSubject}
+                onChange={(e) => setEditSubject(e.target.value)}
+                className="w-full bg-[#1C2538] border border-[#2A3550] rounded-lg px-3 py-2 font-semibold tracking-wide text-white outline-none focus:border-cyan-500"
+              />
+            ) : (
+              <div className="font-semibold tracking-wide">
+                {msg.subject}
+              </div>
+            )}
           </div>
 
           {/* Body */}
-          <div className="bg-[#1C2538] p-5 rounded-lg whitespace-pre-line leading-8 text-gray-200">
-            {msg.body}
-          </div>
+          {editingId === msg._id ? (
+            <textarea
+              value={editBody}
+              onChange={(e) => setEditBody(e.target.value)}
+              rows={6}
+              className="w-full bg-[#1C2538] p-5 rounded-lg leading-8 text-gray-200 border border-[#2A3550] outline-none focus:border-cyan-500"
+            />
+          ) : (
+            <div className="bg-[#1C2538] p-5 rounded-lg whitespace-pre-line leading-8 text-gray-200">
+              {msg.body}
+            </div>
+          )}
 
           {/* Context */}
           <div className="mt-4 text-green-400 italic">
@@ -367,26 +420,47 @@ const approveAllMessages = async () => {
 
           {/* Actions */}
           <div className="flex flex-wrap gap-3 mt-6">
-            <button
-              onClick={() => rejectMessage(msg._id)}
-              className="border border-red-500 text-red-400 px-4 py-2 rounded-lg hover:bg-red-500/10"
-            >
-              ✕ Reject
-            </button>
+            {editingId === msg._id ? (
+              <>
+                <button
+                  onClick={cancelEdit}
+                  className="border border-gray-500 px-4 py-2 rounded-lg hover:bg-gray-700"
+                >
+                  ✕ Cancel
+                </button>
 
-            <button
-              onClick={() => editMessage(msg)}
-              className="border border-gray-500 px-4 py-2 rounded-lg hover:bg-gray-700"
-            >
-              ✎ Edit
-            </button>
+                <button
+                  onClick={() => saveEdit(msg._id)}
+                  disabled={saving}
+                  className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg disabled:opacity-60"
+                >
+                  {saving ? "Saving..." : "💾 Save"}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => rejectMessage(msg._id)}
+                  className="border border-red-500 text-red-400 px-4 py-2 rounded-lg hover:bg-red-500/10"
+                >
+                  ✕ Reject
+                </button>
 
-            <button
-              onClick={() => approveMessage(msg._id)}
-              className="bg-cyan-600 hover:bg-cyan-700 px-4 py-2 rounded-lg"
-            >
-              ✓ Approve & Send
-            </button>
+                <button
+                  onClick={() => startEdit(msg)}
+                  className="border border-gray-500 px-4 py-2 rounded-lg hover:bg-gray-700"
+                >
+                  ✎ Edit
+                </button>
+
+                <button
+                  onClick={() => approveMessage(msg._id)}
+                  className="bg-cyan-600 hover:bg-cyan-700 px-4 py-2 rounded-lg"
+                >
+                  ✓ Approve & Send
+                </button>
+              </>
+            )}
           </div>
         </div>
       ))}

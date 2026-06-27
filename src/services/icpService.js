@@ -14,3 +14,8 @@ export const saveICP = async (payload) => {
   const res = await api.post("/icp", payload);
   return res.data;
 };
+
+export const deleteICP = async () => {
+  const res = await api.delete("/icp");
+  return res.data;
+};

@@ -42,25 +42,48 @@
 //   };
 // }
 
+// Returns the first complete sentence so the card reads short but not cut off.
+function shortSummary(text) {
+  const clean = String(text || "").replace(/\s+/g, " ").trim();
+  if (!clean) return "";
+
+  const match = clean.match(/^(.*?[.!?])(\s|$)/);
+  let sentence = match ? match[1] : clean;
+
+  // Safety cap for an unusually long first sentence.
+  if (sentence.length > 180) {
+    const slice = sentence.slice(0, 180);
+    const lastSpace = slice.lastIndexOf(" ");
+    sentence = slice.slice(0, lastSpace > 0 ? lastSpace : 180).trim() + "…";
+  }
+
+  return sentence;
+}
+
 export function campaignMapper(campaign) {
+  const status = (campaign.status || "").toLowerCase();
+
   return {
     ...campaign,
 
     description:
-      campaign.description ||
+      shortSummary(campaign.response?.summary) ||
+      shortSummary(campaign.description) ||
+      campaign.prompt ||
       campaign.goal ||
       "No description available",
 
     border:
-      campaign.status === "RUNNING"
+      status === "running"
         ? "border-l-cyan-400"
-        : campaign.status === "PAUSED"
+        : status === "paused"
         ? "border-l-yellow-400"
         : "border-l-green-400",
 
     tags: campaign.tags || campaign.channels || [],
 
-    companies: campaign.companies ?? 0,
+    companies:
+      campaign.companiesFound ?? campaign.companies ?? 0,
     buyersFound: campaign.buyersFound ?? 0,
     msgsGenerated: campaign.msgsGenerated ?? 0,
     msgsSent: campaign.msgsSent ?? 0,

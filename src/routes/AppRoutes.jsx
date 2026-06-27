@@ -101,6 +101,7 @@ import { Routes, Route } from "react-router-dom";
  
 import MainLayout from "../layouts/MainLayout";
 import ProtectedRoute from "../components/ProtectedRoute";
+import ICPGate from "../components/ICPGate";
  
 import Login from "../pages/Login";
 import Signup from "../pages/Signup";
@@ -147,7 +148,9 @@ export default function AppRoutes() {
       <Route
         element={
           <ProtectedRoute>
-            <MainLayout />
+            <ICPGate>
+              <MainLayout />
+            </ICPGate>
           </ProtectedRoute>
         }
       >

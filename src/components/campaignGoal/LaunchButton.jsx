@@ -1,10 +1,11 @@
-export default function LaunchButton({ onClick }) {
+export default function LaunchButton({ onClick, label }) {
   return (
     <button
       onClick={onClick}
-      className="bg-pink-500 hover:bg-pink-600 px-6 py-3 rounded-xl font-semibold shadow-lg transition text-white"
+      disabled={!onClick}
+      className="bg-pink-500 hover:bg-pink-600 px-6 py-3 rounded-xl font-semibold shadow-lg transition text-white disabled:opacity-60"
     >
-      ⚡ Launch Agents
+      {label || "⚡ Launch Agents"}
     </button>
   );
 }

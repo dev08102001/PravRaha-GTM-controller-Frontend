@@ -396,7 +396,7 @@ const completedCount = campaigns.filter(
                 {campaign.title}
               </h2>
 
-              <p className="text-gray-400 mt-2">
+              <p className="text-gray-400 mt-2 line-clamp-2 max-w-2xl">
                 {campaign.description}
               </p>
             </div>

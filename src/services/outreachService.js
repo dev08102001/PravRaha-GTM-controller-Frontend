@@ -14,3 +14,8 @@ export const rejectOutreachMessage = async (id) => {
   const { data } = await api.put(`/outreach/${id}/reject`);
   return data;
 };
+
+export const updateOutreachMessage = async (id, payload) => {
+  const { data } = await api.put(`/outreach/${id}`, payload);
+  return data;
+};
