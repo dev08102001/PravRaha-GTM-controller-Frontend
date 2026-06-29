@@ -65,7 +65,11 @@ export default function Agents() {
 
         launchAgent(goal)
           .then(() => {
+            // Refresh campaigns AND the outreach queue so the page never shows
+            // stale messages from a previous run (whose IDs no longer exist).
             queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+            queryClient.invalidateQueries({ queryKey: ["outreach"] });
+            queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
           })
           .catch((err) => {
             console.error("Failed to launch agents:", err);

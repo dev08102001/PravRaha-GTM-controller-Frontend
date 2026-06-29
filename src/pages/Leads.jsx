@@ -51,6 +51,7 @@ export default function Leads() {
       await queryClient.invalidateQueries({
         queryKey: ["leads"],
       });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
 
       alert("Lead deleted successfully");
     } catch (error) {
@@ -221,6 +222,7 @@ export default function Leads() {
           await queryClient.invalidateQueries({
             queryKey: ["leads"],
           });
+          queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
         }}
       />
     </div>

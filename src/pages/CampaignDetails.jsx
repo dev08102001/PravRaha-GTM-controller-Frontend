@@ -10,9 +10,12 @@ export default function CampaignDetails() {
   const { data: campaign, isLoading, isError } = useQuery({
     queryKey: ["campaign", id],
     queryFn: async () => {
-      const { data } = await api.get(`/campaigns/${id}`);
-      return campaignMapper(data);
+      const res = await api.get(`/campaigns/${id}`);
+      // Backend responds with { success, data: campaign } — unwrap it.
+      const raw = res.data?.data || res.data;
+      return campaignMapper(raw);
     },
+    enabled: Boolean(id),
   });
 
   if (isLoading) {
@@ -62,14 +65,14 @@ export default function CampaignDetails() {
 
         <span
           className={`px-4 py-2 rounded-lg font-semibold ${
-            campaign.status === "RUNNING"
+            campaign.status === "running"
               ? "bg-green-500/20 text-green-400"
-              : campaign.status === "PAUSED"
+              : campaign.status === "paused"
               ? "bg-yellow-500/20 text-yellow-400"
               : "bg-blue-500/20 text-blue-400"
           }`}
         >
-          {campaign.status}
+          {(campaign.status || "").toUpperCase()}
         </span>
 
         {(campaign.tags || []).map((tag) => (

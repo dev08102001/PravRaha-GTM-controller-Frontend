@@ -390,8 +390,8 @@ const completedCount = campaigns.filter(
           key={campaign._id}
           className={`bg-gradient-to-br from-[#1A2340] to-[#151D2E] rounded-2xl p-6 border-l-4 ${campaign.border}`}
         >
-          <div className="flex justify-between items-start flex-wrap gap-4">
-            <div>
+          <div className="flex justify-between items-start gap-4">
+            <div className="min-w-0">
               <h2 className="text-2xl font-bold text-white">
                 {campaign.title}
               </h2>
@@ -401,7 +401,7 @@ const completedCount = campaigns.filter(
               </p>
             </div>
 
-            <div className="flex gap-3 flex-wrap">
+            <div className="flex gap-3 justify-end items-center shrink-0">
             <button
           className={`px-4 py-2 rounded-lg text-xs font-bold ${
   campaign.status === "running"
@@ -434,7 +434,7 @@ const completedCount = campaigns.filter(
                    </button>
                   )}
 
-                  {currentRole === "admin" && (
+                  {currentRole === "super_admin" && (
                     <button
                       onClick={() => handleDelete(campaign)}
                       className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg text-white"
@@ -528,7 +528,7 @@ const completedCount = campaigns.filter(
           <div className="mt-6">
             <div className="h-3 bg-[#24304A] rounded-full overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-cyan-400 via-blue-500 to-pink-500 rounded-full"
+                className="h-full bg-gradient-to-r from-cyan-400 via-blue-500 to-pink-500 rounded-full transition-all duration-700 ease-out"
                 style={{
                   width: `${campaign.progress}%`,
                 }}
@@ -542,6 +542,9 @@ const completedCount = campaigns.filter(
             </span>
 
             <span>
+              {campaign.msgsGenerated > 0
+                ? `${campaign.msgsSent} / ${campaign.msgsGenerated} sent · `
+                : ""}
               {campaign.progress}% to goal
             </span>
           </div>

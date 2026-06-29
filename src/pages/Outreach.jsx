@@ -186,9 +186,10 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import useOutreach from "../hooks/queries/useOutreach";
+import SendSuccessModal from "../components/outreach/SendSuccessModal";
 
 import {
-  approveOutreachMessage,
+  sendOutreachMessage,
   rejectOutreachMessage,
   updateOutreachMessage,
 } from "../services/outreachService";
@@ -206,17 +207,38 @@ const [editingId, setEditingId] = useState(null);
 const [editSubject, setEditSubject] = useState("");
 const [editBody, setEditBody] = useState("");
 const [saving, setSaving] = useState(false);
+const [sendingId, setSendingId] = useState(null);
+const [sendingAll, setSendingAll] = useState(false);
+const [sentContact, setSentContact] = useState(null);
 
-const approveMessage = async (id) => {
+// Approve the message and actually deliver it to the contact.
+const sendMessage = async (id) => {
   try {
-    await approveOutreachMessage(id);
+    setSendingId(id);
+    const res = await sendOutreachMessage(id);
 
     await queryClient.invalidateQueries({
       queryKey: ["outreach"],
     });
+    // Refresh campaign stats (Msgs Sent updates on the campaign card).
+    queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
+
+    // Celebrate the send with an attractive confirmation modal.
+    setSentContact(res?.data || messages.find((m) => m._id === id) || null);
   } catch (error) {
     console.error(error);
-    alert("Failed to approve message");
+
+    // The message no longer exists (e.g. a newer campaign replaced the queue).
+    // Refresh so the stale card is removed instead of leaving a dead button.
+    if (error?.response?.status === 404) {
+      await queryClient.invalidateQueries({ queryKey: ["outreach"] });
+      alert("This message is no longer available. The queue has been refreshed.");
+    } else {
+      alert(error?.response?.data?.message || "Failed to send message");
+    }
+  } finally {
+    setSendingId(null);
   }
 };
 
@@ -233,20 +255,51 @@ const rejectMessage = async (id) => {
   }
 };
 
-const approveAllMessages = async () => {
+const sendAllMessages = async () => {
+  const pending = messages.filter(
+    (m) => m.status !== "SENT" && m.status !== "REJECTED"
+  );
+
+  if (pending.length === 0) {
+    alert("No messages left to send.");
+    return;
+  }
+
+  if (
+    !window.confirm(
+      `Approve & send ${pending.length} message(s) to their contacts?`
+    )
+  ) {
+    return;
+  }
+
   try {
-    for (const msg of messages) {
-      if (msg.status !== "APPROVED") {
-        await approveOutreachMessage(msg._id);
+    setSendingAll(true);
+    let delivered = 0;
+    let skipped = 0;
+
+    for (const msg of pending) {
+      try {
+        const res = await sendOutreachMessage(msg._id);
+        if (res?.delivered) delivered += 1;
+        else skipped += 1;
+      } catch {
+        skipped += 1;
       }
     }
 
     await queryClient.invalidateQueries({
       queryKey: ["outreach"],
     });
+    queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
+
+    alert(`Sent ${delivered} message(s). ${skipped} skipped or failed.`);
   } catch (error) {
     console.error(error);
-    alert("Failed to approve all messages");
+    alert("Failed to send all messages");
+  } finally {
+    setSendingAll(false);
   }
 };
 
@@ -283,6 +336,10 @@ const approveAllMessages = async () => {
     }
   };
 
+  // Queue = messages still awaiting send. Sent = already delivered.
+  const queueMessages = messages.filter((m) => m.status !== "SENT");
+  const sentMessages = messages.filter((m) => m.status === "SENT");
+
    if (isLoading){
     return (
       <div className="flex justify-center items-center h-[400px]">
@@ -310,20 +367,39 @@ const approveAllMessages = async () => {
           </h1>
 
           <p className="text-gray-400 mt-2">
-            {messages.length} messages awaiting your review before launch
+            {queueMessages.length} message
+            {queueMessages.length === 1 ? "" : "s"} awaiting your review before
+            launch
           </p>
         </div>
 
-        <button
-          onClick={approveAllMessages}
-          className="bg-green-600 hover:bg-green-700 px-5 py-2 rounded-lg font-medium"
-        >
-          ✓ Approve All
-        </button>
+        {queueMessages.length > 0 && (
+          <button
+            onClick={sendAllMessages}
+            disabled={sendingAll}
+            className="bg-green-600 hover:bg-green-700 px-5 py-2 rounded-lg font-medium disabled:opacity-60"
+          >
+            {sendingAll ? "Sending..." : "✓ Approve & Send All"}
+          </button>
+        )}
       </div>
 
-      {/* Messages */}
-      {messages.map((msg) => (
+      {/* Empty queue state */}
+      {queueMessages.length === 0 && (
+        <div className="bg-[#151D2E] border border-dashed border-[#2A3550] rounded-xl p-8 text-center">
+          <p className="text-gray-300 font-medium">
+            No messages in the queue
+          </p>
+          <p className="text-gray-500 text-sm mt-1">
+            {sentMessages.length > 0
+              ? "All generated messages have been sent. See Sent Messages below."
+              : "Launch a campaign from the Dashboard to generate outreach drafts."}
+          </p>
+        </div>
+      )}
+
+      {/* Queue — messages not yet sent */}
+      {queueMessages.map((msg) => (
         <div
           key={msg._id}
           className="bg-[#151D2E] border border-[#2A3550] rounded-xl p-6"
@@ -401,8 +477,8 @@ const approveAllMessages = async () => {
             Signal Context: {msg.context}
           </div>
 
-          {/* Status */}
-          <div className="mt-4">
+          {/* Status + delivery info */}
+          <div className="mt-4 flex flex-wrap items-center gap-3">
             <span
               className={`px-3 py-1 rounded text-xs font-semibold ${
                 msg.status === "APPROVED"
@@ -411,11 +487,34 @@ const approveAllMessages = async () => {
                   ? "bg-red-500/20 text-red-400"
                   : msg.status === "SENT"
                   ? "bg-cyan-500/20 text-cyan-400"
+                  : msg.status === "FAILED"
+                  ? "bg-red-500/20 text-red-400"
                   : "bg-yellow-500/20 text-yellow-400"
               }`}
             >
               {msg.status || "PENDING"}
             </span>
+
+            {msg.status === "SENT" ? (
+              // Clear confirmation that the message went out to the contact.
+              <span className="inline-flex items-center gap-1.5 text-xs text-cyan-300 font-medium">
+                ✓ {msg.channel === "LINKEDIN" ? "Message" : "Email"} sent to{" "}
+                {msg.name}
+                {msg.email ? ` (${msg.email})` : ""}
+                {msg.sentAt
+                  ? ` • ${new Date(msg.sentAt).toLocaleString()}`
+                  : ""}
+              </span>
+            ) : (
+              // Where this message will be delivered.
+              <span className="text-xs text-gray-400">
+                {msg.email
+                  ? `✉ ${msg.email}`
+                  : msg.linkedinUrl
+                  ? `🔗 ${msg.linkedinUrl}`
+                  : "No contact channel on file"}
+              </span>
+            )}
           </div>
 
           {/* Actions */}
@@ -454,16 +553,82 @@ const approveAllMessages = async () => {
                 </button>
 
                 <button
-                  onClick={() => approveMessage(msg._id)}
-                  className="bg-cyan-600 hover:bg-cyan-700 px-4 py-2 rounded-lg"
+                  onClick={() => sendMessage(msg._id)}
+                  disabled={sendingId === msg._id || msg.status === "SENT"}
+                  className="bg-cyan-600 hover:bg-cyan-700 px-4 py-2 rounded-lg disabled:opacity-60"
                 >
-                  ✓ Approve & Send
+                  {sendingId === msg._id
+                    ? "Sending..."
+                    : msg.status === "SENT"
+                    ? "✓ Sent"
+                    : "✓ Approve & Send"}
                 </button>
               </>
             )}
           </div>
         </div>
       ))}
+
+      {/* -------------------------------------------------- */}
+      {/* SENT MESSAGES — already delivered, shown compactly */}
+      {/* -------------------------------------------------- */}
+      {sentMessages.length > 0 && (
+        <div className="pt-4">
+          <div className="flex items-center gap-3 mb-4">
+            <h2 className="text-2xl font-bold text-white">
+              Sent Messages
+            </h2>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-cyan-500/20 text-cyan-300">
+              {sentMessages.length} sent
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {sentMessages.map((msg) => (
+              <div
+                key={msg._id}
+                className="bg-[#111A2E] border border-[#22304F] rounded-xl p-4 flex items-center justify-between gap-4"
+              >
+                <div className="flex items-center gap-4 min-w-0">
+                  <div className="w-10 h-10 shrink-0 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center font-bold text-cyan-300">
+                    {msg.initials}
+                  </div>
+
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-white truncate">
+                      {msg.name}
+                      <span className="text-gray-400 font-normal">
+                        {" "}
+                        • {msg.role}
+                      </span>
+                    </h3>
+                    <p className="text-gray-400 text-sm truncate">
+                      {msg.company} — {msg.subject}
+                    </p>
+                    <p className="text-xs text-cyan-300/90 mt-0.5 truncate">
+                      ✓ {msg.channel === "LINKEDIN" ? "Message" : "Email"} sent
+                      {msg.email ? ` to ${msg.email}` : ""}
+                      {msg.sentAt
+                        ? ` • ${new Date(msg.sentAt).toLocaleString()}`
+                        : ""}
+                    </p>
+                  </div>
+                </div>
+
+                <span className="shrink-0 px-3 py-1 rounded text-xs font-semibold bg-cyan-500/20 text-cyan-300">
+                  SENT
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <SendSuccessModal
+        open={Boolean(sentContact)}
+        contact={sentContact}
+        onClose={() => setSentContact(null)}
+      />
     </div>
   );
 }

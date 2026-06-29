@@ -10,6 +10,11 @@ export const approveOutreachMessage = async (id) => {
   return data;
 };
 
+export const sendOutreachMessage = async (id) => {
+  const { data } = await api.put(`/outreach/${id}/send`);
+  return data;
+};
+
 export const rejectOutreachMessage = async (id) => {
   const { data } = await api.put(`/outreach/${id}/reject`);
   return data;

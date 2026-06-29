@@ -63,6 +63,15 @@ function shortSummary(text) {
 export function campaignMapper(campaign) {
   const status = (campaign.status || "").toLowerCase();
 
+  const msgsGenerated = campaign.msgsGenerated ?? 0;
+  const msgsSent = campaign.msgsSent ?? 0;
+
+  // Progress = share of generated outreach messages that have been sent.
+  const progress =
+    msgsGenerated > 0
+      ? Math.min(100, Math.round((msgsSent / msgsGenerated) * 100))
+      : 0;
+
   return {
     ...campaign,
 
@@ -85,12 +94,12 @@ export function campaignMapper(campaign) {
     companies:
       campaign.companiesFound ?? campaign.companies ?? 0,
     buyersFound: campaign.buyersFound ?? 0,
-    msgsGenerated: campaign.msgsGenerated ?? 0,
-    msgsSent: campaign.msgsSent ?? 0,
+    msgsGenerated,
+    msgsSent,
     replies: campaign.replies ?? 0,
     meetings: campaign.meetings ?? 0,
 
-    progress: campaign.progress ?? 0,
+    progress,
 
     started: campaign.started || "Just now",
   };
