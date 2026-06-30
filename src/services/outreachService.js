@@ -10,8 +10,8 @@ export const approveOutreachMessage = async (id) => {
   return data;
 };
 
-export const sendOutreachMessage = async (id) => {
-  const { data } = await api.put(`/outreach/${id}/send`);
+export const sendOutreachMessage = async (id, payload = {}) => {
+  const { data } = await api.put(`/outreach/${id}/send`, payload);
   return data;
 };
 
@@ -22,5 +22,20 @@ export const rejectOutreachMessage = async (id) => {
 
 export const updateOutreachMessage = async (id, payload) => {
   const { data } = await api.put(`/outreach/${id}`, payload);
+  return data;
+};
+
+export const sendFollowUp = async (id, payload) => {
+  const { data } = await api.put(`/outreach/${id}/follow-up`, payload);
+  return data;
+};
+
+export const markReplied = async (id) => {
+  const { data } = await api.put(`/outreach/${id}/reply`);
+  return data;
+};
+
+export const sendTestEmail = async (payload) => {
+  const { data } = await api.post(`/outreach/test`, payload);
   return data;
 };

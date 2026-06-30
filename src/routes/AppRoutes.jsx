@@ -117,6 +117,7 @@ import Campaigns from "../pages/Campaigns";
 import CampaignDetails from "../pages/CampaignDetails";
 import Pipeline from "../pages/Pipeline";
 import Outreach from "../pages/Outreach";
+import OutreachStatus from "../pages/OutreachStatus";
 import Agents from "../pages/Agents";
 import Signals from "../pages/Signals";
 import Analytics from "../pages/Analytics";
@@ -183,6 +184,11 @@ export default function AppRoutes() {
         <Route
           path="/outreach"
           element={<Outreach />}
+        />
+ 
+        <Route
+          path="/outreach-status"
+          element={<OutreachStatus />}
         />
  
         <Route

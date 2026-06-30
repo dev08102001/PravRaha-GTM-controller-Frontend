@@ -187,6 +187,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import useOutreach from "../hooks/queries/useOutreach";
 import SendSuccessModal from "../components/outreach/SendSuccessModal";
+import ConfirmSendModal from "../components/outreach/ConfirmSendModal";
 
 import {
   sendOutreachMessage,
@@ -210,12 +211,13 @@ const [saving, setSaving] = useState(false);
 const [sendingId, setSendingId] = useState(null);
 const [sendingAll, setSendingAll] = useState(false);
 const [sentContact, setSentContact] = useState(null);
+const [confirmMsg, setConfirmMsg] = useState(null);
 
 // Approve the message and actually deliver it to the contact.
-const sendMessage = async (id) => {
+const sendMessage = async (id, payload = {}) => {
   try {
     setSendingId(id);
-    const res = await sendOutreachMessage(id);
+    const res = await sendOutreachMessage(id, payload);
 
     await queryClient.invalidateQueries({
       queryKey: ["outreach"],
@@ -225,7 +227,8 @@ const sendMessage = async (id) => {
     queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
     queryClient.invalidateQueries({ queryKey: ["pipeline-summary"] });
 
-    // Celebrate the send with an attractive confirmation modal.
+    // Close the confirm dialog and celebrate the send.
+    setConfirmMsg(null);
     setSentContact(res?.data || messages.find((m) => m._id === id) || null);
   } catch (error) {
     console.error(error);
@@ -241,6 +244,12 @@ const sendMessage = async (id) => {
   } finally {
     setSendingId(null);
   }
+};
+
+// Confirm dialog handler: send for real to the (possibly edited) email.
+const confirmAndSend = (email) => {
+  if (!confirmMsg) return;
+  sendMessage(confirmMsg._id, { email, force: true });
 };
 
 const rejectMessage = async (id) => {
@@ -555,7 +564,7 @@ const sendAllMessages = async () => {
                 </button>
 
                 <button
-                  onClick={() => sendMessage(msg._id)}
+                  onClick={() => setConfirmMsg(msg)}
                   disabled={sendingId === msg._id || msg.status === "SENT"}
                   className="bg-cyan-600 hover:bg-cyan-700 px-4 py-2 rounded-lg disabled:opacity-60"
                 >
@@ -630,6 +639,14 @@ const sendAllMessages = async () => {
         open={Boolean(sentContact)}
         contact={sentContact}
         onClose={() => setSentContact(null)}
+      />
+
+      <ConfirmSendModal
+        open={Boolean(confirmMsg)}
+        message={confirmMsg}
+        sending={sendingId === confirmMsg?._id}
+        onClose={() => setConfirmMsg(null)}
+        onConfirm={confirmAndSend}
       />
     </div>
   );

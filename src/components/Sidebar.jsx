@@ -225,6 +225,11 @@ export default function Sidebar() {
       badge: outreachData?.total,
     },
 
+    {
+      name: "Outreach Status",
+      path: "/outreach-status",
+    },
+
     ...(role !== "user"
       ? [
           {
