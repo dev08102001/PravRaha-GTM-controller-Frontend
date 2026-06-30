@@ -70,6 +70,7 @@ export default function Agents() {
             queryClient.invalidateQueries({ queryKey: ["campaigns"] });
             queryClient.invalidateQueries({ queryKey: ["outreach"] });
             queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
+            queryClient.invalidateQueries({ queryKey: ["pipeline-summary"] });
           })
           .catch((err) => {
             console.error("Failed to launch agents:", err);

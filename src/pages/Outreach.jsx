@@ -223,6 +223,7 @@ const sendMessage = async (id) => {
     // Refresh campaign stats (Msgs Sent updates on the campaign card).
     queryClient.invalidateQueries({ queryKey: ["campaigns"] });
     queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
+    queryClient.invalidateQueries({ queryKey: ["pipeline-summary"] });
 
     // Celebrate the send with an attractive confirmation modal.
     setSentContact(res?.data || messages.find((m) => m._id === id) || null);
@@ -293,6 +294,7 @@ const sendAllMessages = async () => {
     });
     queryClient.invalidateQueries({ queryKey: ["campaigns"] });
     queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
+    queryClient.invalidateQueries({ queryKey: ["pipeline-summary"] });
 
     alert(`Sent ${delivered} message(s). ${skipped} skipped or failed.`);
   } catch (error) {

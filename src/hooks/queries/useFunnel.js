@@ -5,6 +5,7 @@ export default function useFunnel() {
   return useQuery({
     queryKey: ["pipeline-summary"],
     queryFn: getPipelineSummary,
-    staleTime: 30000,
+    refetchOnMount: "always",
+    staleTime: 15_000,
   });
 }

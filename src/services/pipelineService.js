@@ -5,12 +5,8 @@ export const getPipeline = async () => {
   return data;
 };
 
+// Live GTM funnel computed from real campaigns + outreach + leads.
 export const getPipelineSummary = async () => {
-  const { data } = await api.get("/pipeline-board");
-
-  return Object.entries(data).map(([label, records]) => ({
-    _id: label,
-    label,
-    value: Array.isArray(records) ? records.length : 0,
-  }));
+  const { data } = await api.get("/dashboard/funnel");
+  return Array.isArray(data?.stages) ? data.stages : [];
 };
