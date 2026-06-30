@@ -169,11 +169,15 @@
 
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import logo from "../assets/logo.png";
+import useCampaigns from "../hooks/queries/useCampaigns";
 import useAgents from "../hooks/queries/useAgents";
+import useOutreach from "../hooks/queries/useOutreach";
+// import useSignalFeed from "../hooks/queries/useSignalFeed";
 
 export default function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { data: campaigns = [] } = useCampaigns();
 
   const { data: agents = [] } = useAgents();
 
@@ -181,6 +185,10 @@ export default function Sidebar() {
     JSON.parse(localStorage.getItem("user")) || {};
 
   const role = user?.role?.toLowerCase();
+
+  const { data: outreachData } = useOutreach();
+  // const { data: signalFeedData } = useSignalFeed("");
+
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -198,7 +206,7 @@ export default function Sidebar() {
     {
       name: "Campaigns",
       path: "/campaigns",
-      badge: 3,
+      badge: campaigns.length,
     },
 
     {
@@ -214,7 +222,7 @@ export default function Sidebar() {
     {
       name: "Outreach Queue",
       path: "/outreach",
-      badge: 7,
+      badge: outreachData?.total,
     },
 
     ...(role !== "user"
@@ -222,7 +230,7 @@ export default function Sidebar() {
           {
             name: "Agent Monitor",
             path: "/agents",
-            badge: 4,
+            badge: agents.length,
           },
         ]
       : []),
@@ -231,7 +239,11 @@ export default function Sidebar() {
     {
       title: "INTELLIGENCE",
       items: [
-        { name: "Signal Feed", path: "/signals", badge: 12 },
+        {
+          name: "Signal Feed",
+          path: "/signals",
+          // badge: signalFeedData?.total,
+        },
 
         ...(role !== "user"
           ? [
