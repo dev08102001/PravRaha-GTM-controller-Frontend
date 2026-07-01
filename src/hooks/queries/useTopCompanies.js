@@ -6,6 +6,6 @@ export default function useTopCompanies(query = "") {
     queryKey: ["top-companies", query],
     queryFn: () => getTopCompanies(query),
     refetchOnMount: "always",
-    staleTime: 15_000,
+    staleTime: 0,
   });
 }

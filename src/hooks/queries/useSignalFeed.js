@@ -6,6 +6,6 @@ export default function useSignalFeed(query = "") {
     queryKey: ["signal-feed", query],
     queryFn: () => getSignalFeed(query),
     refetchOnMount: "always",
-    staleTime: 15_000,
+    staleTime: 0,
   });
 }

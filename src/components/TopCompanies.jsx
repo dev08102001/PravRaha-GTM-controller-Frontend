@@ -142,26 +142,11 @@
 //   );
 // }
 
-import { useEffect, useState } from "react";
+import useGtmPrompt from "../hooks/useGtmPrompt";
 import useTopCompanies from "../hooks/queries/useTopCompanies";
 
 export default function TopCompanies() {
-  // Initialise from the last campaign-goal prompt (if any), then react to new
-  // prompts launched from the Campaign Goal card on the dashboard.
-  const [query, setQuery] = useState(() => {
-    try {
-      return localStorage.getItem("gtm:lastPrompt") || "";
-    } catch {
-      return "";
-    }
-  });
-
-  useEffect(() => {
-    const onPrompt = (e) => setQuery(e.detail || "");
-    window.addEventListener("gtm:prompt", onPrompt);
-    return () => window.removeEventListener("gtm:prompt", onPrompt);
-  }, []);
-
+  const { query } = useGtmPrompt();
   const { data, isLoading, isError } = useTopCompanies(query);
   const companies = data?.items || [];
 

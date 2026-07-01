@@ -12,3 +12,9 @@ export const getSignalFeed = async (q = "") => {
   });
   return data;
 };
+
+// Save signal feed companies to MongoDB after the client finishes a search.
+export const saveSignalFeed = async (query = "") => {
+  const { data } = await api.post("/signal-feed/save", { query });
+  return data;
+};

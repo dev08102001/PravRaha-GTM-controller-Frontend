@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { saveSignalFeed } from "../../services/signalService";
 import GoalInput from "./GoalInput";
 import LaunchButton from "./LaunchButton";
 import LaunchCountdown from "./LaunchCountdown";
@@ -16,33 +17,37 @@ const broadcastPrompt = (prompt) => {
 
 export default function CampaignGoalCard() {
   const navigate = useNavigate();
-  const [goal, setGoal] = useState("");
+  const [goal, setGoal] = useState(() => {
+    try {
+      return localStorage.getItem("gtm:lastPrompt") || "";
+    } catch {
+      return "";
+    }
+  });
   const [counting, setCounting] = useState(false);
 
-  // As the client types the goal, live-update the Live Signal Feed with
-  // signals related to the prompt (debounced so we don't spam the API).
+  // As the client types the goal, live-update dashboard widgets (debounced).
   useEffect(() => {
     const trimmed = goal.trim();
-    if (!trimmed) return;
-
-    const t = setTimeout(() => broadcastPrompt(trimmed), 500);
+    const t = setTimeout(() => broadcastPrompt(trimmed), 400);
     return () => clearTimeout(t);
   }, [goal]);
 
-  const handleLaunch = () => {
+  const handleLaunch = async () => {
     const trimmed = goal.trim();
     if (!trimmed) {
       alert("Please enter a campaign goal");
       return;
     }
 
-    // Reflect this prompt in the dashboard's Live Signal Feed immediately
-    // (also persisted, so it stays when the client returns to the dashboard).
     broadcastPrompt(trimmed);
 
-    // Don't start the pipeline here. Play the countdown, then route to the
-    // Agent Monitor and start the run THERE so the client watches the agents
-    // execute one-by-one from the very first agent.
+    try {
+      await saveSignalFeed(trimmed);
+    } catch (err) {
+      console.error("Failed to save signal feed companies:", err);
+    }
+
     setCounting(true);
   };
 

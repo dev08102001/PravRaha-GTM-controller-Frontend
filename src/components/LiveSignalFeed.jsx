@@ -1,13 +1,9 @@
-import { useEffect, useState } from "react";
+import useGtmPrompt from "../hooks/useGtmPrompt";
 import useSignalFeed from "../hooks/queries/useSignalFeed";
+import usePersistSignalFeedSearch from "../hooks/usePersistSignalFeedSearch";
+import SignalFeedListItem from "./signals/SignalFeedListItem";
 
-const urgencyStyles = {
-  high: "bg-red-500/15 text-red-300 border-red-500/30",
-  medium: "bg-amber-500/15 text-amber-300 border-amber-500/30",
-  low: "bg-slate-500/15 text-slate-300 border-slate-500/30",
-};
-
-function Shell({ children, query, search, setSearch, onSubmit, onClear }) {
+function Shell({ children, query, onClear }) {
   return (
     <div className="bg-[#1A2340] border border-slate-700 rounded-2xl overflow-hidden flex flex-col">
       <div className="p-6 border-b border-slate-700">
@@ -18,13 +14,14 @@ function Shell({ children, query, search, setSearch, onSubmit, onClear }) {
             </h2>
             <p className="text-gray-400 text-sm mt-1">
               {query
-                ? `Signals related to “${query}”`
-                : "High-confidence buying signals from your database"}
+                ? `Showing accounts related to “${query}”`
+                : "High-confidence accounts from your database"}
             </p>
           </div>
 
           {query && (
             <button
+              type="button"
               onClick={onClear}
               className="shrink-0 text-xs text-gray-400 hover:text-white border border-slate-600 rounded-lg px-3 py-1.5 transition-colors"
             >
@@ -32,22 +29,6 @@ function Shell({ children, query, search, setSearch, onSubmit, onClear }) {
             </button>
           )}
         </div>
-
-        {/* Search box — type a prompt to filter the feed from the DB */}
-        <form onSubmit={onSubmit} className="mt-4 flex gap-2">
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search signals (e.g. cybersecurity, fintech, hiring)…"
-            className="flex-1 bg-[#0E1426] border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-cyan-500"
-          />
-          <button
-            type="submit"
-            className="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-sm font-semibold hover:opacity-90 transition-opacity"
-          >
-            Search
-          </button>
-        </form>
       </div>
 
       {children}
@@ -56,52 +37,16 @@ function Shell({ children, query, search, setSearch, onSubmit, onClear }) {
 }
 
 export default function LiveSignalFeed() {
-  // Initialise from the last campaign-goal prompt (if any).
-  const [query, setQuery] = useState(() => {
-    try {
-      return localStorage.getItem("gtm:lastPrompt") || "";
-    } catch {
-      return "";
-    }
-  });
-  const [search, setSearch] = useState(query);
-
-  // React to a new campaign goal being launched on the dashboard.
-  useEffect(() => {
-    const onPrompt = (e) => {
-      const next = e.detail || "";
-      setQuery(next);
-      setSearch(next);
-    };
-    window.addEventListener("gtm:prompt", onPrompt);
-    return () => window.removeEventListener("gtm:prompt", onPrompt);
-  }, []);
+  const { query, clearPrompt } = useGtmPrompt();
 
   const { data, isLoading, isError } = useSignalFeed(query);
   const items = data?.items || [];
 
-  const submit = (e) => {
-    e.preventDefault();
-    setQuery(search.trim());
-  };
+  usePersistSignalFeedSearch(query, items);
 
-  const clear = () => {
-    setQuery("");
-    setSearch("");
-    try {
-      localStorage.removeItem("gtm:lastPrompt");
-    } catch {
-      /* ignore */
-    }
-  };
+  const clear = () => clearPrompt();
 
-  const shellProps = {
-    query,
-    search,
-    setSearch,
-    onSubmit: submit,
-    onClear: clear,
-  };
+  const shellProps = { query, onClear: clear };
 
   if (isLoading) {
     return (
@@ -127,12 +72,12 @@ export default function LiveSignalFeed() {
             ⚡
           </div>
           <h3 className="text-base font-semibold text-white">
-            {query ? "No signals match that prompt" : "No signals yet"}
+            {query ? "No accounts match that goal" : "No signals yet"}
           </h3>
           <p className="text-gray-400 text-sm mt-1 max-w-xs">
             {query
-              ? "Try a broader term like “software”, “financial”, or “hiring”."
-              : "Signals from your database will appear here."}
+              ? "Try a broader campaign goal from the dashboard."
+              : "Enter a campaign goal to populate this feed."}
           </p>
         </div>
       </Shell>
@@ -142,58 +87,16 @@ export default function LiveSignalFeed() {
   return (
     <Shell {...shellProps}>
       <div className="px-6 py-2 text-xs text-gray-500 border-b border-slate-700/60">
-        Showing {items.length}
-        {data?.total > items.length ? ` of ${data.total}` : ""} signals
+        {items.length} companies
       </div>
 
-      <div className="max-h-[460px] overflow-y-auto">
-        {items.map((signal) => (
-          <div
-            key={signal._id}
-            className="flex justify-between items-start gap-3 p-5 border-b border-slate-700 last:border-b-0 hover:bg-white/[0.02] transition-colors"
-          >
-            <div className="min-w-0">
-              <h3 className="font-bold text-lg truncate">
-                {signal.company}
-                {signal.contact?.name && (
-                  <span className="text-gray-400 font-normal text-sm">
-                    {" "}
-                    · {signal.contact.name}
-                  </span>
-                )}
-              </h3>
-
-              <p className="text-gray-400 mt-1 text-sm line-clamp-2">
-                {signal.description}
-              </p>
-
-              <div className="flex items-center flex-wrap gap-2 mt-3">
-                <span className="px-3 py-1 text-xs rounded-full bg-cyan-500/20 text-cyan-300">
-                  {signal.type}
-                </span>
-
-                {signal.industry && (
-                  <span className="px-3 py-1 text-xs rounded-full bg-slate-700/60 text-slate-300">
-                    {signal.industry}
-                  </span>
-                )}
-
-                <span
-                  className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full border ${
-                    urgencyStyles[signal.urgency] || urgencyStyles.medium
-                  }`}
-                >
-                  {signal.urgency}
-                </span>
-
-                <span className="text-xs text-gray-500">{signal.timeAgo}</span>
-              </div>
-            </div>
-
-            <div className="text-cyan-400 text-2xl font-bold shrink-0">
-              {signal.score}
-            </div>
-          </div>
+      <div className="max-h-[280px] overflow-y-auto p-4 space-y-2">
+        {items.map((item, index) => (
+          <SignalFeedListItem
+            key={item._id}
+            item={item}
+            index={index}
+          />
         ))}
       </div>
     </Shell>
