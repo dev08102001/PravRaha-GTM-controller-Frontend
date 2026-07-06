@@ -35,6 +35,11 @@ export const markReplied = async (id) => {
   return data;
 };
 
+export const runDailyOutreach = async (payload = {}) => {
+  const { data } = await api.post("/outreach/run-daily", payload);
+  return data;
+};
+
 export const sendTestEmail = async (payload) => {
   const { data } = await api.post(`/outreach/test`, payload);
   return data;

@@ -188,11 +188,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import useOutreach from "../hooks/queries/useOutreach";
 import SendSuccessModal from "../components/outreach/SendSuccessModal";
 import ConfirmSendModal from "../components/outreach/ConfirmSendModal";
+import ContactLocalTime from "../components/outreach/ContactLocalTime";
 
 import {
   sendOutreachMessage,
   rejectOutreachMessage,
   updateOutreachMessage,
+  runDailyOutreach,
 } from "../services/outreachService";
 
 export default function Outreach() {
@@ -227,8 +229,23 @@ const sendMessage = async (id, payload = {}) => {
     queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
     queryClient.invalidateQueries({ queryKey: ["pipeline-summary"] });
 
-    // Close the confirm dialog and celebrate the send.
+    // Close the confirm dialog and celebrate the send or show schedule notice.
     setConfirmMsg(null);
+    if (res?.scheduled) {
+      alert(
+        (res?.message ||
+          "Outside the contact's working hours. The message has been scheduled.") +
+          " Saved in Outreach Status."
+      );
+      return;
+    }
+    if (res?.queued) {
+      alert(
+        (res?.message || "Message queued for the email worker.") +
+          " Track progress in Outreach Status."
+      );
+      return;
+    }
     setSentContact(res?.data || messages.find((m) => m._id === id) || null);
   } catch (error) {
     console.error(error);
@@ -267,7 +284,10 @@ const rejectMessage = async (id) => {
 
 const sendAllMessages = async () => {
   const pending = messages.filter(
-    (m) => m.status !== "SENT" && m.status !== "REJECTED"
+    (m) =>
+      m.status !== "SENT" &&
+      m.status !== "REJECTED" &&
+      m.status !== "SCHEDULED"
   );
 
   if (pending.length === 0) {
@@ -277,7 +297,7 @@ const sendAllMessages = async () => {
 
   if (
     !window.confirm(
-      `Approve & send ${pending.length} message(s) to their contacts?`
+      `Run today's outreach sequence?\n\n• Up to 10 new contacts\n• Follow-ups for yesterday's batch (if due)\n\n${pending.length} message(s) waiting in queue.`
     )
   ) {
     return;
@@ -285,18 +305,7 @@ const sendAllMessages = async () => {
 
   try {
     setSendingAll(true);
-    let delivered = 0;
-    let skipped = 0;
-
-    for (const msg of pending) {
-      try {
-        const res = await sendOutreachMessage(msg._id);
-        if (res?.delivered) delivered += 1;
-        else skipped += 1;
-      } catch {
-        skipped += 1;
-      }
-    }
+    const res = await runDailyOutreach({ force: true });
 
     await queryClient.invalidateQueries({
       queryKey: ["outreach"],
@@ -305,10 +314,28 @@ const sendAllMessages = async () => {
     queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
     queryClient.invalidateQueries({ queryKey: ["pipeline-summary"] });
 
-    alert(`Sent ${delivered} message(s). ${skipped} skipped or failed.`);
+    if (res?.skipped) {
+      alert(res.message || "Today's outreach already ran.");
+      return;
+    }
+
+    const parts = [];
+    if (res?.newSent) parts.push(`${res.newSent} new queued`);
+    if (res?.newScheduled) parts.push(`${res.newScheduled} new scheduled`);
+    if (res?.followUpSent) parts.push(`${res.followUpSent} follow-ups queued`);
+    if (res?.followUpScheduled) {
+      parts.push(`${res.followUpScheduled} follow-ups scheduled`);
+    }
+    alert(
+      parts.length
+        ? `Batch ${res.batch}: ${parts.join(", ")}. Check Outreach Status for tracking.`
+        : res?.message || "No messages processed today."
+    );
   } catch (error) {
     console.error(error);
-    alert("Failed to send all messages");
+    alert(
+      error?.response?.data?.message || "Failed to run daily outreach sequence"
+    );
   } finally {
     setSendingAll(false);
   }
@@ -348,8 +375,40 @@ const sendAllMessages = async () => {
   };
 
   // Queue = messages still awaiting send. Sent = already delivered.
-  const queueMessages = messages.filter((m) => m.status !== "SENT");
+  const queueMessages = messages.filter(
+    (m) =>
+      !["SENT", "REJECTED", "QUEUED", "SENDING"].includes(
+        (m.status || "").toUpperCase()
+      )
+  );
+  const workerMessages = messages.filter((m) =>
+    ["QUEUED", "SENDING"].includes((m.status || "").toUpperCase())
+  );
+  const scheduledMessages = messages.filter((m) => m.status === "SCHEDULED");
   const sentMessages = messages.filter((m) => m.status === "SENT");
+
+  const formatLocation = (msg) => {
+    const parts = [msg.contactCity, msg.contactState, msg.contactCountry].filter(
+      Boolean
+    );
+    return parts.length ? parts.join(", ") : null;
+  };
+
+  const shortenContext = (text = "", maxLen = 220) => {
+    const clean = String(text).replace(/\s+/g, " ").trim();
+    if (!clean) return "";
+    if (clean.length <= maxLen) return clean;
+
+    const sentences = clean.match(/[^.!?]+[.!?]+/g) || [clean];
+    const twoLines = sentences.slice(0, 2).join(" ").trim();
+    if (twoLines.length <= maxLen) return twoLines;
+
+    const cut = twoLines.slice(0, maxLen);
+    const lastSpace = cut.lastIndexOf(" ");
+    const trimmed =
+      lastSpace > Math.floor(maxLen * 0.5) ? cut.slice(0, lastSpace) : cut;
+    return `${trimmed.trim()}…`;
+  };
 
    if (isLoading){
     return (
@@ -381,6 +440,12 @@ const sendAllMessages = async () => {
             {queueMessages.length} message
             {queueMessages.length === 1 ? "" : "s"} awaiting your review before
             launch
+            {scheduledMessages.length > 0
+              ? ` · ${scheduledMessages.length} scheduled for working hours`
+              : ""}
+            {workerMessages.length > 0
+              ? ` · ${workerMessages.length} in worker queue`
+              : ""}
           </p>
         </div>
 
@@ -390,7 +455,7 @@ const sendAllMessages = async () => {
             disabled={sendingAll}
             className="bg-green-600 hover:bg-green-700 px-5 py-2 rounded-lg font-medium disabled:opacity-60"
           >
-            {sendingAll ? "Sending..." : "✓ Approve & Send All"}
+            {sendingAll ? "Running..." : "✓ Run Today's Outreach (10/day)"}
           </button>
         )}
       </div>
@@ -483,10 +548,54 @@ const sendAllMessages = async () => {
             </div>
           )}
 
-          {/* Context */}
-          <div className="mt-4 text-green-400 italic">
-            Signal Context: {msg.context}
-          </div>
+          {/* Context — max two lines */}
+          {msg.context && (
+            <div className="mt-4 text-sm leading-snug">
+              <span className="text-green-500/90 font-medium not-italic">
+                Signal Context:
+              </span>{" "}
+              <span className="text-green-400 italic line-clamp-2">
+                {shortenContext(msg.context)}
+              </span>
+            </div>
+          )}
+
+          {/* Timezone + delivery window */}
+          {(msg.timezone || msg.timezoneLabel || formatLocation(msg)) && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+              {formatLocation(msg) && (
+                <span className="px-2.5 py-1 rounded bg-[#1C2538] text-gray-300 border border-[#2A3550]">
+                  📍 {formatLocation(msg)}
+                </span>
+              )}
+              {(msg.timezone || msg.timezoneLabel) && (
+                <span className="px-2.5 py-1 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 font-medium">
+                  Local now:{" "}
+                  <ContactLocalTime timezone={msg.timezone || "UTC"} />
+                </span>
+              )}
+              {msg.timezoneLabel && (
+                <span className="px-2.5 py-1 rounded bg-[#1C2538] text-gray-300 border border-[#2A3550]">
+                  🌐 {msg.timezoneLabel}
+                </span>
+              )}
+              {msg.sendWindow && (
+                <span className="px-2.5 py-1 rounded bg-[#1C2538] text-gray-400 border border-[#2A3550]">
+                  {msg.sendWindow}
+                </span>
+              )}
+              {msg.inWorkingHours === false && msg.status !== "SCHEDULED" && (
+                <span className="px-2.5 py-1 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                  Outside working hours now
+                </span>
+              )}
+              {msg.status === "SCHEDULED" && msg.scheduledSendLabel && (
+                <span className="px-2.5 py-1 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30">
+                  Scheduled: {msg.scheduledSendLabel}
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Status + delivery info */}
           <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -496,8 +605,10 @@ const sendAllMessages = async () => {
                   ? "bg-green-500/20 text-green-400"
                   : msg.status === "REJECTED"
                   ? "bg-red-500/20 text-red-400"
-                  : msg.status === "SENT"
+                  :                 msg.status === "SENT"
                   ? "bg-cyan-500/20 text-cyan-400"
+                  : msg.status === "SCHEDULED"
+                  ? "bg-violet-500/20 text-violet-300"
                   : msg.status === "FAILED"
                   ? "bg-red-500/20 text-red-400"
                   : "bg-yellow-500/20 text-yellow-400"
@@ -565,13 +676,19 @@ const sendAllMessages = async () => {
 
                 <button
                   onClick={() => setConfirmMsg(msg)}
-                  disabled={sendingId === msg._id || msg.status === "SENT"}
+                  disabled={
+                    sendingId === msg._id ||
+                    msg.status === "SENT" ||
+                    msg.status === "SCHEDULED"
+                  }
                   className="bg-cyan-600 hover:bg-cyan-700 px-4 py-2 rounded-lg disabled:opacity-60"
                 >
                   {sendingId === msg._id
                     ? "Sending..."
                     : msg.status === "SENT"
                     ? "✓ Sent"
+                    : msg.status === "SCHEDULED"
+                    ? "⏳ Scheduled"
                     : "✓ Approve & Send"}
                 </button>
               </>

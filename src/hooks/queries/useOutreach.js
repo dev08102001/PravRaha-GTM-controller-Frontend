@@ -8,10 +8,15 @@ export default function useOutreach() {
       const data = await getOutreachMessages();
       return Array.isArray(data) ? data : [];
     },
-    // Outreach is regenerated on every campaign launch, so always pull fresh
-    // data when the page mounts to avoid acting on deleted messages.
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
     staleTime: 0,
+    refetchInterval: (query) => {
+      const list = query.state.data || [];
+      const hasActive = list.some((m) =>
+        ["QUEUED", "SENDING"].includes((m.status || "").toUpperCase())
+      );
+      return hasActive ? 5000 : false;
+    },
   });
 }

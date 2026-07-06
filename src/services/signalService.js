@@ -5,10 +5,13 @@ export const getSignals = async () => {
   return data;
 };
 
-// Live signal feed from the knowledge base, optionally filtered by a prompt.
+// Live Signal Feed from MongoDB (same source as Top Target Companies).
 export const getSignalFeed = async (q = "") => {
   const { data } = await api.get("/signal-feed", {
-    params: q ? { q } : {},
+    params: {
+      limit: 20,
+      ...(q ? { q } : {}),
+    },
   });
   return data;
 };

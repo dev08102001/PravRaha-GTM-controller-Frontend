@@ -5,10 +5,13 @@ export const getCompanies = async () => {
   return data;
 };
 
-// Top target companies from the knowledge base, optionally ranked by a prompt.
+// Live Top Target Companies from MongoDB (CompanyData + SignalData).
 export const getTopCompanies = async (q = "") => {
   const { data } = await api.get("/companies/top", {
-    params: q ? { q } : {},
+    params: {
+      limit: 10,
+      ...(q ? { q } : {}),
+    },
   });
   return data;
 };

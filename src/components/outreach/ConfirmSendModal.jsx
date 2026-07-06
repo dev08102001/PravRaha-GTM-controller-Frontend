@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import ContactLocalTime from "./ContactLocalTime";
 
 const MailIcon = ({ className = "w-5 h-5" }) => (
   <svg
@@ -126,8 +127,42 @@ export default function ConfirmSendModal({
             </div>
           </div>
 
+          {(message.timezoneLabel || message.sendWindow || message.timezone) && (
+            <div className="rounded-lg border border-[#2A3550] bg-[#151D2E] px-3 py-2 text-xs text-gray-400 space-y-1">
+              {(message.timezone || message.timezoneLabel) && (
+                <p className="text-cyan-300">
+                  <span className="text-gray-500">Local time now:</span>{" "}
+                  <ContactLocalTime
+                    timezone={message.timezone || "UTC"}
+                    className="font-medium"
+                  />
+                </p>
+              )}
+              {message.timezoneLabel && (
+                <p>
+                  <span className="text-gray-500">Timezone:</span>{" "}
+                  {message.timezoneLabel}
+                </p>
+              )}
+              {message.sendWindow && (
+                <p>
+                  <span className="text-gray-500">Send window:</span>{" "}
+                  {message.sendWindow}
+                </p>
+              )}
+              {message.inWorkingHours === false && (
+                <p className="text-amber-400">
+                  Contact is outside working hours — send will be scheduled for{" "}
+                  {message.scheduledSendLabel || "the next available slot"}.
+                </p>
+              )}
+            </div>
+          )}
+
           <p className="text-xs text-gray-500">
-            This will deliver a real email to the address above.
+            Emails are only delivered Mon–Fri, 10 AM–5 PM in the contact&apos;s
+            local timezone. Outside that window, the message is scheduled
+            automatically.
           </p>
         </div>
 

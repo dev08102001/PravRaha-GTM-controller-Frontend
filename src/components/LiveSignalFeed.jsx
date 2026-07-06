@@ -14,8 +14,8 @@ function Shell({ children, query, onClear }) {
             </h2>
             <p className="text-gray-400 text-sm mt-1">
               {query
-                ? `Showing accounts related to “${query}”`
-                : "High-confidence accounts from your database"}
+                ? `Showing accounts related to “${query}” (live from database)`
+                : "High-confidence accounts loaded live from your database"}
             </p>
           </div>
 
@@ -51,7 +51,7 @@ export default function LiveSignalFeed() {
   if (isLoading) {
     return (
       <Shell {...shellProps}>
-        <div className="p-6 text-gray-400">Loading signals…</div>
+        <div className="p-6 text-gray-400">Fetching signals from database…</div>
       </Shell>
     );
   }
@@ -59,7 +59,7 @@ export default function LiveSignalFeed() {
   if (isError) {
     return (
       <Shell {...shellProps}>
-        <div className="p-6 text-red-400">Failed to load signals</div>
+        <div className="p-6 text-red-400">Failed to load signals from database</div>
       </Shell>
     );
   }
@@ -72,12 +72,12 @@ export default function LiveSignalFeed() {
             ⚡
           </div>
           <h3 className="text-base font-semibold text-white">
-            {query ? "No accounts match that goal" : "No signals yet"}
+            {query ? "No accounts match that goal" : "No signals in database"}
           </h3>
           <p className="text-gray-400 text-sm mt-1 max-w-xs">
             {query
               ? "Try a broader campaign goal from the dashboard."
-              : "Enter a campaign goal to populate this feed."}
+              : "Import company and signal data to populate this feed."}
           </p>
         </div>
       </Shell>

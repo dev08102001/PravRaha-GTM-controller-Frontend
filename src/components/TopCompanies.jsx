@@ -159,8 +159,8 @@ export default function TopCompanies() {
       </div>
       <p className="text-gray-400 text-sm mt-1">
         {query
-          ? `Companies related to “${query}”`
-          : "Highest-intent accounts from your database"}
+          ? `Companies related to “${query}” (live from database)`
+          : "Highest-intent accounts loaded live from your database"}
       </p>
     </div>
   );
@@ -169,7 +169,7 @@ export default function TopCompanies() {
     return (
       <div className="bg-[#1A2340] border border-slate-700 rounded-2xl p-6">
         <Header />
-        <div className="text-gray-400">Loading companies...</div>
+        <div className="text-gray-400">Fetching companies from database...</div>
       </div>
     );
   }
@@ -178,7 +178,7 @@ export default function TopCompanies() {
     return (
       <div className="bg-[#1A2340] border border-slate-700 rounded-2xl p-6">
         <Header />
-        <div className="text-red-400">Failed to load companies.</div>
+        <div className="text-red-400">Failed to load companies from database.</div>
       </div>
     );
   }
@@ -189,8 +189,8 @@ export default function TopCompanies() {
         <Header />
         <div className="text-gray-400">
           {query
-            ? "No companies match that prompt. Try a broader term like “software” or “fintech”."
-            : "No target companies available."}
+            ? "No companies in the database match that prompt. Try a broader term."
+            : "No companies found in the database yet."}
         </div>
       </div>
     );
@@ -220,6 +220,7 @@ export default function TopCompanies() {
 
                 <div className="text-sm text-gray-400 mt-2">
                   {company.employees || "Unknown"} employees
+                  {company.industry ? ` · ${company.industry}` : ""}
                 </div>
 
                 <span className="inline-block mt-3 px-3 py-1 bg-cyan-500/20 text-cyan-300 rounded-full text-xs">

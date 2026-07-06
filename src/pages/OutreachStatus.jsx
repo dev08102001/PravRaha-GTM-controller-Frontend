@@ -14,6 +14,14 @@ const deriveFollowUp = (msg, now) => {
     return { key: "REPLIED", label: "Replied", ready: false };
   }
 
+  const status = (msg.status || "").toUpperCase();
+  if (status === "SCHEDULED") {
+    return { key: "SCHEDULED", label: "Scheduled", ready: false };
+  }
+  if (status === "QUEUED" || status === "SENDING") {
+    return { key: "QUEUED", label: status === "SENDING" ? "Sending" : "In Queue", ready: false };
+  }
+
   const next = msg.nextFollowUpTime
     ? new Date(msg.nextFollowUpTime).getTime()
     : 0;
@@ -23,6 +31,31 @@ const deriveFollowUp = (msg, now) => {
   }
 
   return { key: "WAITING", label: "Waiting for Response", ready: false };
+};
+
+const isTrackedOutreach = (m) => {
+  const status = (m.status || "").toUpperCase();
+  const hasEmail =
+    Boolean(m.email) || (m.channel || "").toUpperCase() === "EMAIL";
+  const approved =
+    Boolean(m.approvedAt) ||
+    Boolean(m.sentAt) ||
+    [
+      "Sent",
+      "Scheduled",
+      "Queued",
+      "Sending",
+      "Follow-up Queued",
+      "Follow-up Sending",
+      "Follow-up Sent",
+      "Follow-up Scheduled",
+      "Replied",
+    ].includes(m.followUpStatus);
+  return (
+    hasEmail &&
+    ["SENT", "SCHEDULED", "QUEUED", "SENDING", "FAILED"].includes(status) &&
+    approved
+  );
 };
 
 // Format a millisecond gap as "18h 32m" (or "12m" / "Ready now").
@@ -296,9 +329,12 @@ export default function OutreachStatus() {
   const sentEmails = useMemo(
     () =>
       messages
-        .filter((m) => (m.status || "").toUpperCase() === "SENT")
-        .filter((m) => (m.channel || "").toUpperCase() === "EMAIL")
-        .sort((a, b) => new Date(b.sentAt || 0) - new Date(a.sentAt || 0)),
+        .filter(isTrackedOutreach)
+        .sort(
+          (a, b) =>
+            new Date(b.approvedAt || b.sentAt || 0) -
+            new Date(a.approvedAt || a.sentAt || 0)
+        ),
     [messages]
   );
 
@@ -308,11 +344,13 @@ export default function OutreachStatus() {
     const awaiting = sentEmails.filter(
       (m) =>
         !m.replyReceived &&
+        (m.status || "").toUpperCase() === "SENT" &&
         now < new Date(m.nextFollowUpTime || 0).getTime()
     ).length;
     const ready = sentEmails.filter(
       (m) =>
         !m.replyReceived &&
+        (m.status || "").toUpperCase() === "SENT" &&
         now >= new Date(m.nextFollowUpTime || 0).getTime()
     ).length;
 
@@ -328,6 +366,8 @@ export default function OutreachStatus() {
       if (filter === "AWAITING") return fu.key === "WAITING";
       if (filter === "READY") return fu.key === "READY";
       if (filter === "REPLIED") return fu.key === "REPLIED";
+      if (filter === "SCHEDULED") return fu.key === "SCHEDULED";
+      if (filter === "QUEUED") return fu.key === "QUEUED";
       return true;
     });
   }, [sentEmails, filter, now]);
@@ -337,10 +377,12 @@ export default function OutreachStatus() {
     setFilter((prev) => (prev === key ? "ALL" : key));
 
   const FILTER_LABELS = {
-    ALL: "All sent emails",
+    ALL: "All outreach emails",
     AWAITING: "Awaiting reply",
     READY: "Follow-up ready",
     REPLIED: "Replied",
+    SCHEDULED: "Scheduled for delivery",
+    QUEUED: "In worker queue",
   };
 
   const refresh = () =>
@@ -431,9 +473,9 @@ export default function OutreachStatus() {
             No emails sent yet
           </p>
           <p className="text-gray-500 text-sm mt-1 max-w-md mx-auto">
-            Run the agents to generate drafts, then approve &amp; send the
-            emails from the Outreach Queue. Sent emails will appear here for
-            follow-up tracking.
+            Run today&apos;s outreach from the Outreach Queue, or approve &amp;
+            send individual messages. Approved emails appear here for follow-up
+            tracking (10 new contacts per day + daily follow-ups).
           </p>
         </div>
       )}
@@ -475,6 +517,7 @@ export default function OutreachStatus() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="text-[11px] uppercase tracking-wider text-gray-400 bg-[#0C1424] border-b border-[#22304F]">
+                  <th className="px-4 py-4 font-semibold">Batch</th>
                   <th className="px-4 py-4 font-semibold">Contact</th>
                   <th className="px-4 py-4 font-semibold">Company</th>
                   <th className="px-4 py-4 font-semibold">Email</th>
@@ -503,6 +546,10 @@ export default function OutreachStatus() {
                       ? "bg-orange-500/[0.04]"
                       : fu.key === "REPLIED"
                       ? "bg-emerald-500/[0.03]"
+                      : fu.key === "SCHEDULED"
+                      ? "bg-violet-500/[0.03]"
+                      : fu.key === "QUEUED"
+                      ? "bg-cyan-500/[0.03]"
                       : "";
 
                   return (
@@ -510,6 +557,11 @@ export default function OutreachStatus() {
                       key={msg._id}
                       className={`border-b border-[#192540] last:border-0 hover:bg-[#16203A] transition align-middle ${rowHighlight}`}
                     >
+                      {/* Batch */}
+                      <td className="px-4 py-4 text-gray-400 text-sm whitespace-nowrap">
+                        {msg.outreachBatch ? `#${msg.outreachBatch}` : "—"}
+                      </td>
+
                       {/* Contact */}
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-3 min-w-0">
@@ -558,14 +610,28 @@ export default function OutreachStatus() {
 
                       {/* Sent At */}
                       <td className="px-4 py-4 text-gray-400 text-sm whitespace-nowrap">
-                        {msg.sentAt
+                        {msg.status === "SCHEDULED" && msg.scheduledSendLabel
+                          ? msg.scheduledSendLabel
+                          : msg.sentAt
                           ? new Date(msg.sentAt).toLocaleString()
+                          : msg.approvedAt
+                          ? new Date(msg.approvedAt).toLocaleString()
                           : "—"}
                       </td>
 
                       {/* Follow-up status */}
                       <td className="px-4 py-4">
-                        {fu.key === "REPLIED" ? (
+                        {fu.key === "SCHEDULED" ? (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-violet-400">
+                            <span className="w-2 h-2 rounded-full bg-violet-400" />
+                            Awaiting delivery
+                          </span>
+                        ) : fu.key === "QUEUED" ? (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-cyan-400">
+                            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                            {fu.label}
+                          </span>
+                        ) : fu.key === "REPLIED" ? (
                           <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
                             <span className="w-2 h-2 rounded-full bg-emerald-400" />
                             Replied
@@ -588,7 +654,7 @@ export default function OutreachStatus() {
 
                       {/* Next follow-up countdown */}
                       <td className="px-4 py-4 whitespace-nowrap">
-                        {msg.replyReceived ? (
+                        {msg.replyReceived || fu.key === "SCHEDULED" || fu.key === "QUEUED" ? (
                           <span className="text-gray-500 text-sm">—</span>
                         ) : fu.ready ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-orange-500/15 text-orange-300">
@@ -618,7 +684,15 @@ export default function OutreachStatus() {
 
                       {/* Action */}
                       <td className="px-4 py-4">
-                        {msg.replyReceived ? (
+                        {fu.key === "SCHEDULED" ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-violet-500/15 text-violet-300 ring-1 ring-violet-500/30">
+                            Queued
+                          </span>
+                        ) : fu.key === "QUEUED" ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/30">
+                            Worker processing
+                          </span>
+                        ) : msg.replyReceived ? (
                           <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30">
                             <Icon path={icons.check} className="w-4 h-4" />
                             Replied

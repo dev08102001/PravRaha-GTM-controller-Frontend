@@ -34,6 +34,16 @@ export const useSaveICP = () => {
       queryClient.invalidateQueries({
         queryKey: ["icp"],
       });
+      // Outreach queue is pruned to the new Decision Makers / Influencers.
+      queryClient.invalidateQueries({
+        queryKey: ["outreach"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["top-companies"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["signal-feed"],
+      });
 
       alert("ICP Saved Successfully");
     },
@@ -52,6 +62,9 @@ export const useDeleteICP = () => {
 
       queryClient.invalidateQueries({
         queryKey: ["icp"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["outreach"],
       });
 
       alert("ICP Deleted Successfully");
