@@ -617,7 +617,9 @@ import IntegrationsCard from "../components/settings/IntegrationsCard";
 import AgentPreferencesCard from "../components/settings/AgentPreferencesCard";
 import TeamAccessCard from "../components/settings/TeamAccessCard";
 import EmailInfrastructureCard from "../components/settings/EmailInfrastructureCard";
+import MailboxSelector from "../components/Settings/MailboxSelector";
 import { saveSettings } from "../services/settingsService";
+import useMailboxes from "../hooks/queries/useMailboxes";
 
 export default function Settings() {
   const {
@@ -630,6 +632,7 @@ export default function Settings() {
     JSON.parse(localStorage.getItem("user")) || {};
 
   const role = user?.role?.toLowerCase();
+  const { loading: mailboxesLoading, mailboxes } = useMailboxes();
 
   /*
    * Admin sees all integrations.
@@ -654,6 +657,8 @@ export default function Settings() {
         teamMembers: settings?.teamMembers || [],
         emailInfrastructure:
           settings?.emailInfrastructure || {},
+        selectedMailboxId:
+          settings?.selectedMailboxId || null,
       });
 
       alert("Settings saved successfully");
@@ -703,6 +708,17 @@ export default function Settings() {
           />
         )}
       </div>
+
+      <MailboxSelector
+        mailboxes={mailboxes}
+        selectedMailboxId={settings?.selectedMailboxId}
+        onChange={(id) =>
+          setSettings((prev) => ({
+            ...prev,
+            selectedMailboxId: id,
+          }))
+        }
+      />
 
       {/* Email Infrastructure - Admin Only */}
         {role === "super_admin" && (

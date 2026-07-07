@@ -11,6 +11,7 @@ const DEFAULT_SETTINGS = {
     dailySendLimit: "",
     healthScore: 0,
   },
+  selectedMailboxId: null,
 };
 
 export default function useSettings() {
@@ -49,6 +50,8 @@ export default function useSettings() {
               dailySendLimit: "",
               healthScore: 0,
             },
+          selectedMailboxId:
+            response.data.selectedMailboxId || null,
         });
       } else {
         setSettings(DEFAULT_SETTINGS);
