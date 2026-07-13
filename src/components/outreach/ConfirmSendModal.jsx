@@ -120,7 +120,9 @@ export default function ConfirmSendModal({
           {/* Subject preview */}
           <div>
             <label className="text-xs uppercase tracking-wider text-gray-500">
-              Subject
+              {message._sequenceLabel
+                ? `${message._sequenceLabel} — Subject`
+                : "Subject"}
             </label>
             <div className="mt-1 bg-[#151D2E] border border-[#2A3550] rounded-lg px-3 py-2 text-gray-200 truncate">
               {message.subject || "(no subject)"}

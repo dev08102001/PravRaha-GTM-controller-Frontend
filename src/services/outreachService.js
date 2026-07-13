@@ -15,6 +15,12 @@ export const sendOutreachMessage = async (id, payload = {}) => {
   return data;
 };
 
+/** Update subject/body/email for a specific sequence step (0–6). */
+export const updateOutreachSequenceStep = async (id, payload) => {
+  const { data } = await api.put(`/outreach/${id}`, payload);
+  return data;
+};
+
 export const rejectOutreachMessage = async (id) => {
   const { data } = await api.put(`/outreach/${id}/reject`);
   return data;

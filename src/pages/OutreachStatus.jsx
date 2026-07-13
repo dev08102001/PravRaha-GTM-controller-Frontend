@@ -72,8 +72,29 @@ const formatCountdown = (ms) => {
 
 const firstNameOf = (name = "") => name.trim().split(/\s+/)[0] || "there";
 
-// A sensible default follow-up draft, editable in the composer.
+const getNextSequenceFollowUp = (msg) => {
+  const sequence = Array.isArray(msg.emailSequence) ? msg.emailSequence : [];
+  return sequence.find(
+    (s) =>
+      s.step > 0 &&
+      ["PENDING", "SCHEDULED", "FAILED"].includes(
+        String(s.status || "").toUpperCase()
+      )
+  );
+};
+
+// Prefer the next pending step from the 7-email sequence when available.
 const buildFollowUpDraft = (msg) => {
+  const next = getNextSequenceFollowUp(msg);
+  if (next) {
+    return {
+      subject: next.subject,
+      body: next.body,
+      sequenceStep: next.step,
+      label: next.label || `Follow-up ${next.step}`,
+    };
+  }
+
   const subject = msg.subject
     ? msg.subject.toLowerCase().startsWith("re:")
       ? msg.subject
@@ -94,7 +115,12 @@ Would you be open to a quick chat this week? Happy to work around your schedule.
 
 Best regards`;
 
-  return { subject, body };
+  return {
+    subject,
+    body,
+    sequenceStep: count + 1,
+    label: `Follow-up ${count + 1}`,
+  };
 };
 
 // Deterministic avatar gradient per contact for a bit of colour variety.
@@ -192,6 +218,8 @@ function StatCard({ label, value, icon, gradient, ring, text, active, onClick })
 function FollowUpComposer({ msg, onClose, onSent }) {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  const [sequenceStep, setSequenceStep] = useState(null);
+  const [stepLabel, setStepLabel] = useState("Follow-up");
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
@@ -199,6 +227,8 @@ function FollowUpComposer({ msg, onClose, onSent }) {
       const draft = buildFollowUpDraft(msg);
       setSubject(draft.subject);
       setBody(draft.body);
+      setSequenceStep(draft.sequenceStep);
+      setStepLabel(draft.label || "Follow-up");
     }
   }, [msg]);
 
@@ -207,7 +237,7 @@ function FollowUpComposer({ msg, onClose, onSent }) {
   const handleSend = async () => {
     try {
       setSending(true);
-      await sendFollowUp(msg._id, { subject, body });
+      await sendFollowUp(msg._id, { subject, body, sequenceStep });
       onSent();
     } catch (error) {
       console.error(error);
@@ -229,7 +259,7 @@ function FollowUpComposer({ msg, onClose, onSent }) {
               </div>
               <div>
                 <h2 className="text-xl font-bold text-white">
-                  Send Follow-up Email
+                  Send {stepLabel}
                 </h2>
                 <p className="text-gray-400 text-sm">
                   Follow-up #{(msg.followUpCount || 0) + 1} • same thread
@@ -391,8 +421,14 @@ export default function OutreachStatus() {
   const handleReply = async (id) => {
     try {
       setReplyingId(id);
-      await markReplied(id);
+      const res = await markReplied(id);
       await refresh();
+      const cancelled = res?.cancelled;
+      if (cancelled > 0) {
+        alert(
+          `Marked as replied. ${cancelled} remaining sequence email(s) cancelled.`
+        );
+      }
     } catch (error) {
       console.error(error);
       alert("Failed to mark as replied");

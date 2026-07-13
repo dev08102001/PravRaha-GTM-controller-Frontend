@@ -7,6 +7,7 @@ import {
 import {
   getICP,
   getICPConfig,
+  getTechStack,
   saveICP,
   deleteICP,
 } from "../../services/icpService";
@@ -23,6 +24,13 @@ export const useICPConfig = () => {
   return useQuery({
     queryKey: ["icp-config"],
     queryFn: getICPConfig,
+  });
+};
+
+export const useTechStack = () => {
+  return useQuery({
+    queryKey: ["tech-stack"],
+    queryFn: getTechStack,
   });
 };
 
