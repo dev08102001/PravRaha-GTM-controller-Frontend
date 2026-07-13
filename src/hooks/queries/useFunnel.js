@@ -6,6 +6,8 @@ export default function useFunnel() {
     queryKey: ["pipeline-summary"],
     queryFn: getPipelineSummary,
     refetchOnMount: "always",
-    staleTime: 15_000,
+    refetchOnWindowFocus: true,
+    // Always reflect live MongoDB funnel counts (Buyers === Messages).
+    staleTime: 0,
   });
 }

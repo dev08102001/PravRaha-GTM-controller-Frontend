@@ -65,6 +65,7 @@ export const useDeleteICP = () => {
       queryClient.setQueryData(["icp"], null);
       queryClient.invalidateQueries({ queryKey: ["icp"] });
       queryClient.invalidateQueries({ queryKey: ["outreach"] });
+      queryClient.invalidateQueries({ queryKey: ["signal-feed"] });
       alert("ICP Deleted Successfully");
     },
   });

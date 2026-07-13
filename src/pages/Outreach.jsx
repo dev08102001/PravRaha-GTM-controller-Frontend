@@ -345,7 +345,7 @@ export default function Outreach() {
             disabled={sendingAll}
             className="bg-green-600 hover:bg-green-700 px-5 py-2 rounded-lg font-medium disabled:opacity-60"
           >
-            {sendingAll ? "Running..." : "✓ Run Today's Outreach (10/day)"}
+            {sendingAll ? "Running..." : "Approve and send all"}
           </button>
         )}
       </div>

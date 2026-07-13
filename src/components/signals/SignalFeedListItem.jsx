@@ -17,7 +17,14 @@ export default function SignalFeedListItem({
           #{index + 1}
         </span>
         <div className="min-w-0">
-          <h3 className="font-bold text-white truncate">{item.company}</h3>
+          <div className="flex items-center gap-2 min-w-0">
+            <h3 className="font-bold text-white truncate">{item.company}</h3>
+            {item.formType && (
+              <span className="shrink-0 px-1.5 py-0.5 text-[10px] rounded border border-slate-600/80 text-gray-400">
+                {item.formType.replace(/^Form\s+/i, "")}
+              </span>
+            )}
+          </div>
           <span className="inline-block mt-1.5 px-2.5 py-0.5 text-[11px] rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/25">
             {item.signal || item.type}
           </span>
