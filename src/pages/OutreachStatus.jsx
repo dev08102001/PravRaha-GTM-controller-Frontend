@@ -2,36 +2,51 @@ import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import useOutreach from "../hooks/queries/useOutreach";
-import { sendFollowUp, markReplied } from "../services/outreachService";
+import { sendFollowUp, markReplied, syncOutreachReplies } from "../services/outreachService";
 import TiptapEditor from "./TiptapEditor";
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
 
-// Derive the live follow-up state from a message + the current time.
-const deriveFollowUp = (msg, now) => {
-  if (msg.replyReceived) {
-    return { key: "REPLIED", label: "Replied", ready: false };
-  }
+/*
+| Single source of truth for the 4 Outreach Status cards and the table filter.
+| REPLIED / AWAITING / READY partition SENT outreach; other statuses stay under
+| Emails Sent only.
+*/
+const getSectionKey = (msg, now = Date.now()) => {
+  if (msg.replyReceived) return "REPLIED";
 
   const status = (msg.status || "").toUpperCase();
-  if (status === "SCHEDULED") {
-    return { key: "SCHEDULED", label: "Scheduled", ready: false };
-  }
-  if (status === "QUEUED" || status === "SENDING") {
-    return { key: "QUEUED", label: status === "SENDING" ? "Sending" : "In Queue", ready: false };
-  }
+  if (status === "SCHEDULED") return "SCHEDULED";
+  if (status === "QUEUED" || status === "SENDING") return "QUEUED";
+  if (status === "FAILED") return "FAILED";
 
   const next = msg.nextFollowUpTime
     ? new Date(msg.nextFollowUpTime).getTime()
     : 0;
 
-  if (!next || now >= next) {
-    return { key: "READY", label: "Ready", ready: true };
-  }
+  if (next && now < next) return "AWAITING";
+  return "READY";
+};
 
-  return { key: "WAITING", label: "Waiting for Response", ready: false };
+// Derive the live follow-up state from a message + the current time.
+const deriveFollowUp = (msg, now) => {
+  const key = getSectionKey(msg, now);
+  if (key === "REPLIED") return { key: "REPLIED", label: "Replied", ready: false };
+  if (key === "SCHEDULED") return { key: "SCHEDULED", label: "Scheduled", ready: false };
+  if (key === "QUEUED") {
+    const status = (msg.status || "").toUpperCase();
+    return {
+      key: "QUEUED",
+      label: status === "SENDING" ? "Sending" : "In Queue",
+      ready: false,
+    };
+  }
+  if (key === "AWAITING") {
+    return { key: "WAITING", label: "Waiting for Response", ready: false };
+  }
+  return { key: "READY", label: "Ready", ready: true };
 };
 
 const isTrackedOutreach = (m) => {
@@ -348,6 +363,7 @@ export default function OutreachStatus() {
 
   const [composerMsg, setComposerMsg] = useState(null);
   const [replyingId, setReplyingId] = useState(null);
+  const [syncingReplies, setSyncingReplies] = useState(false);
 
   // Which stat card is selected. "ALL" = every sent email.
   const [filter, setFilter] = useState("ALL");
@@ -358,6 +374,34 @@ export default function OutreachStatus() {
     const id = setInterval(() => setNow(Date.now()), 30000);
     return () => clearInterval(id);
   }, []);
+
+  // Poll Gmail for replies so Replied section updates automatically.
+  useEffect(() => {
+    let cancelled = false;
+
+    const runSync = async () => {
+      try {
+        setSyncingReplies(true);
+        const res = await syncOutreachReplies();
+        if (!cancelled && res?.replied > 0) {
+          await queryClient.invalidateQueries({ queryKey: ["outreach"] });
+        } else if (!cancelled) {
+          await queryClient.invalidateQueries({ queryKey: ["outreach"] });
+        }
+      } catch (err) {
+        console.warn("Reply sync failed:", err?.message || err);
+      } finally {
+        if (!cancelled) setSyncingReplies(false);
+      }
+    };
+
+    runSync();
+    const id = setInterval(runSync, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [queryClient]);
 
   const sentEmails = useMemo(
     () =>
@@ -372,50 +416,40 @@ export default function OutreachStatus() {
   );
 
   const stats = useMemo(() => {
-    const total = sentEmails.length;
-    const replied = sentEmails.filter((m) => m.replyReceived).length;
-    const awaiting = sentEmails.filter(
-      (m) =>
-        !m.replyReceived &&
-        (m.status || "").toUpperCase() === "SENT" &&
-        now < new Date(m.nextFollowUpTime || 0).getTime()
-    ).length;
-    const ready = sentEmails.filter(
-      (m) =>
-        !m.replyReceived &&
-        (m.status || "").toUpperCase() === "SENT" &&
-        now >= new Date(m.nextFollowUpTime || 0).getTime()
-    ).length;
+    let replied = 0;
+    let awaiting = 0;
+    let ready = 0;
 
-    return { total, replied, awaiting, ready };
+    for (const m of sentEmails) {
+      const key = getSectionKey(m, now);
+      if (key === "REPLIED") replied += 1;
+      else if (key === "AWAITING") awaiting += 1;
+      else if (key === "READY") ready += 1;
+    }
+
+    return {
+      total: sentEmails.length,
+      replied,
+      awaiting,
+      ready,
+    };
   }, [sentEmails, now]);
 
-  // Rows shown in the table, narrowed by the selected stat card.
+  // Rows shown in the table — only the selected section.
   const visibleEmails = useMemo(() => {
     if (filter === "ALL") return sentEmails;
-
-    return sentEmails.filter((m) => {
-      const fu = deriveFollowUp(m, now);
-      if (filter === "AWAITING") return fu.key === "WAITING";
-      if (filter === "READY") return fu.key === "READY";
-      if (filter === "REPLIED") return fu.key === "REPLIED";
-      if (filter === "SCHEDULED") return fu.key === "SCHEDULED";
-      if (filter === "QUEUED") return fu.key === "QUEUED";
-      return true;
-    });
+    return sentEmails.filter((m) => getSectionKey(m, now) === filter);
   }, [sentEmails, filter, now]);
 
-  // Toggle a filter: clicking the active card again resets to "ALL".
-  const toggleFilter = (key) =>
+  // Select a section; clicking the same card again returns to Emails Sent.
+  const selectSection = (key) =>
     setFilter((prev) => (prev === key ? "ALL" : key));
 
   const FILTER_LABELS = {
-    ALL: "All outreach emails",
-    AWAITING: "Awaiting reply",
-    READY: "Follow-up ready",
+    ALL: "Emails Sent",
+    AWAITING: "Awaiting Reply",
+    READY: "Follow-up Ready",
     REPLIED: "Replied",
-    SCHEDULED: "Scheduled for delivery",
-    QUEUED: "In worker queue",
   };
 
   const refresh = () =>
@@ -458,7 +492,41 @@ export default function OutreachStatus() {
 
   return (
     <div className="space-y-7">
-      {/* Stat cards */}
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-gray-400">
+          Replies from Gmail are detected automatically and shown under{" "}
+          <span className="text-emerald-300">Replied</span>
+          {syncingReplies ? " · syncing…" : ""}.
+        </p>
+        <button
+          type="button"
+          disabled={syncingReplies}
+          onClick={async () => {
+            try {
+              setSyncingReplies(true);
+              const res = await syncOutreachReplies();
+              await refresh();
+              alert(
+                res?.message ||
+                  `Reply sync complete: ${res?.replied || 0} new replies`
+              );
+            } catch (err) {
+              alert(
+                err?.response?.data?.message ||
+                  err?.message ||
+                  "Failed to sync replies"
+              );
+            } finally {
+              setSyncingReplies(false);
+            }
+          }}
+          className="shrink-0 text-xs rounded-lg border border-slate-600 px-3 py-1.5 text-gray-300 hover:text-white hover:border-slate-500 disabled:opacity-50"
+        >
+          {syncingReplies ? "Syncing…" : "Sync replies"}
+        </button>
+      </div>
+
+      {/* Stat cards — click to filter the table below */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
           label="Emails Sent"
@@ -478,7 +546,7 @@ export default function OutreachStatus() {
           ring="hover:shadow-[0_0_30px_-10px_rgba(245,158,11,0.5)]"
           text="text-yellow-300"
           active={filter === "AWAITING"}
-          onClick={() => toggleFilter("AWAITING")}
+          onClick={() => selectSection("AWAITING")}
         />
         <StatCard
           label="Follow-up Ready"
@@ -488,7 +556,7 @@ export default function OutreachStatus() {
           ring="hover:shadow-[0_0_30px_-10px_rgba(249,115,22,0.5)]"
           text="text-orange-300"
           active={filter === "READY"}
-          onClick={() => toggleFilter("READY")}
+          onClick={() => selectSection("READY")}
         />
         <StatCard
           label="Replied"
@@ -498,7 +566,7 @@ export default function OutreachStatus() {
           ring="hover:shadow-[0_0_30px_-10px_rgba(16,185,129,0.5)]"
           text="text-emerald-300"
           active={filter === "REPLIED"}
-          onClick={() => toggleFilter("REPLIED")}
+          onClick={() => selectSection("REPLIED")}
         />
       </div>
 
@@ -549,7 +617,16 @@ export default function OutreachStatus() {
         <div className="rounded-2xl border border-[#22304F] bg-[#10182B] overflow-hidden shadow-xl">
           {visibleEmails.length === 0 ? (
             <div className="p-10 text-center text-gray-400">
-              No emails in “{FILTER_LABELS[filter]}”.
+              No emails in “{FILTER_LABELS[filter] || filter}”.
+              {filter !== "ALL" && (
+                <button
+                  type="button"
+                  onClick={() => setFilter("ALL")}
+                  className="block mx-auto mt-3 text-sm text-cyan-400 hover:text-cyan-300"
+                >
+                  Show all sent emails
+                </button>
+              )}
             </div>
           ) : (
           <div className="overflow-x-auto">

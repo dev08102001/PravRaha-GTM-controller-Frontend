@@ -41,6 +41,11 @@ export const markReplied = async (id) => {
   return data;
 };
 
+export const syncOutreachReplies = async (payload = {}) => {
+  const { data } = await api.post("/outreach/sync-replies", payload);
+  return data;
+};
+
 export const runDailyOutreach = async (payload = {}) => {
   const { data } = await api.post("/outreach/run-daily", payload);
   return data;

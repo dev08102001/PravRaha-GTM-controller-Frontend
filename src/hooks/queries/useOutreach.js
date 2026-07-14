@@ -16,7 +16,13 @@ export default function useOutreach() {
       const hasActive = list.some((m) =>
         ["QUEUED", "SENDING"].includes((m.status || "").toUpperCase())
       );
-      return hasActive ? 5000 : false;
+      const awaitingReply = list.some(
+        (m) =>
+          (m.status || "").toUpperCase() === "SENT" && !m.replyReceived
+      );
+      if (hasActive) return 5000;
+      if (awaitingReply) return 30000;
+      return false;
     },
   });
 }
