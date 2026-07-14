@@ -5,6 +5,7 @@ import useOutreach from "../hooks/queries/useOutreach";
 import SendSuccessModal from "../components/outreach/SendSuccessModal";
 import ConfirmSendModal from "../components/outreach/ConfirmSendModal";
 import ContactLocalTime from "../components/outreach/ContactLocalTime";
+import TiptapEditor from "./TiptapEditor";
 
 import {
   sendOutreachMessage,
@@ -433,13 +434,16 @@ export default function Outreach() {
 
             {/* Body */}
             {editingId === msg._id ? (
-              <textarea
-                value={editBody}
-                onChange={(e) => setEditBody(e.target.value)}
-                rows={6}
-                disabled={stepCancelled || stepSent}
-                className="w-full bg-[#1C2538] p-5 rounded-lg leading-8 text-gray-200 border border-[#2A3550] outline-none focus:border-cyan-500 disabled:opacity-60"
-              />
+              // <textarea
+              //   value={editBody}
+              //   onChange={(e) => setEditBody(e.target.value)}
+              //   rows={6}
+              //   disabled={stepCancelled || stepSent}
+              //   className="w-full bg-[#1C2538] p-5 rounded-lg leading-8 text-gray-200 border border-[#2A3550] outline-none focus:border-cyan-500 disabled:opacity-60"
+              // />
+               <div className="rounded-lg border border-[#2A3550] overflow-hidden bg-[#1C2538]">
+              <TiptapEditor value={editBody} onChange={setEditBody} />
+            </div>
             ) : (
               <div className="bg-[#1C2538] p-5 rounded-lg whitespace-pre-line leading-8 text-gray-200">
                 {displayBody}

@@ -11,6 +11,12 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.0",
+    "@tiptap/extension-image": "^3.27.4",
+    "@tiptap/extension-text-align": "^3.27.4",
+    "@tiptap/extension-underline": "^3.27.4",
+    "@tiptap/pm": "^3.27.4",
+    "@tiptap/react": "^3.27.4",
+    "@tiptap/starter-kit": "^3.27.4",
     "axios": "^1.17.0",
     "lucide-react": "^1.17.0",
     "react": "^19.2.6",

@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import useOutreach from "../hooks/queries/useOutreach";
 import { sendFollowUp, markReplied } from "../services/outreachService";
+import TiptapEditor from "./TiptapEditor";
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
@@ -301,17 +302,19 @@ function FollowUpComposer({ msg, onClose, onSent }) {
             />
           </div>
 
-          <div>
-            <label className="text-xs uppercase tracking-wider text-gray-500">
-              Email Body
-            </label>
-            <textarea
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              rows={9}
-              className="mt-1 w-full bg-[#151D2E] border border-[#2A3550] rounded-lg px-3 py-2 text-gray-200 leading-7 outline-none focus:border-cyan-500"
-            />
           </div>
+
+
+         <label className="text-xs uppercase tracking-wider text-gray-500">
+           Email Body
+         </label>
+          <div className="mt-1">
+         <TiptapEditor
+          value={body}
+            onChange={setBody}
+         />
+       </div>
+  
         </div>
 
         {/* Footer */}
@@ -331,7 +334,7 @@ function FollowUpComposer({ msg, onClose, onSent }) {
           </button>
         </div>
       </div>
-    </div>
+    
   );
 }
 
