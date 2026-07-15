@@ -27,13 +27,15 @@
 //     </div>
 //   );
 // }
+import toast from "react-hot-toast";
+
 export default function Topbar() {
   const handleSync = () => {
-    alert("Sync Data clicked");
+    toast.success("Sync Data clicked");
   };
 
   const handleNewCampaign = () => {
-    alert("New Campaign clicked");
+    toast.success("New Campaign clicked");
   };
 
   return (

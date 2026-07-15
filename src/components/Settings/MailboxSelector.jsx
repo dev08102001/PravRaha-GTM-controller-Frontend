@@ -1,5 +1,6 @@
 import React from "react";
 import axios from "axios";
+import toast from "react-hot-toast";
 
 export default function MailboxSelector({
   mailboxes = [],
@@ -24,7 +25,7 @@ export default function MailboxSelector({
       }
     } catch (err) {
       console.error(err);
-      alert("Failed to connect Gmail.");
+      toast.error("Failed to connect Gmail.");
     }
   };
 

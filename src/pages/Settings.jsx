@@ -617,6 +617,7 @@ import IntegrationsCard from "../components/settings/IntegrationsCard";
 import AgentPreferencesCard from "../components/settings/AgentPreferencesCard";
 import TeamAccessCard from "../components/settings/TeamAccessCard";
 import EmailInfrastructureCard from "../components/settings/EmailInfrastructureCard";
+import toast from "react-hot-toast";
 import MailboxSelector from "../components/Settings/MailboxSelector";
 import { saveSettings } from "../services/settingsService";
 import useMailboxes from "../hooks/queries/useMailboxes";
@@ -661,10 +662,10 @@ export default function Settings() {
           settings?.selectedMailboxId || null,
       });
 
-      alert("Settings saved successfully");
+      toast.success("Settings saved successfully");
     } catch (error) {
       console.error("Save Settings Error:", error);
-      alert("Failed to save settings");
+      toast.error("Failed to save settings");
     }
   };
 

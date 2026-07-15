@@ -1,5 +1,6 @@
 import axios from "axios";
- 
+import toast from "react-hot-toast";
+
 const api = axios.create({
   baseURL: "http://localhost:9077/api"
 });
@@ -26,7 +27,7 @@ api.interceptors.response.use(
       localStorage.removeItem("token");
       localStorage.removeItem("user");
  
-      alert(
+      toast.error(
         "Your session has expired or you have logged in from another device."
       );
  

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import toast from "react-hot-toast";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
@@ -70,7 +71,7 @@ const addImage = async () => {
         .run();
     } catch (err) {
       console.error(err);
-      alert(err.message || "Image upload failed");
+      toast.error(err.message || "Image upload failed");
     }
   };
 

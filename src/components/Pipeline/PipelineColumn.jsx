@@ -22,15 +22,16 @@
 // }
 
 
+import toast from "react-hot-toast";
 import PipelineCard from "./PipelineCard";
 
 export default function PipelineColumn({ stage, companies }) {
   const handleStageClick = () => {
-    alert(`Stage: ${stage}`);
+    toast.success(`Stage: ${stage}`);
   };
 
   const handleCountClick = () => {
-    alert(
+    toast.success(
       `${companies?.length || 0} companies in ${stage}`
     );
   };

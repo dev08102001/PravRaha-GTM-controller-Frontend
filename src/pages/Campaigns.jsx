@@ -243,6 +243,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import useCampaigns from "../hooks/queries/useCampaigns";
 import NewCampaignModal from "../components/NewCampaignModal";
 import { normalizeRole } from "../utils/roleUtils";
+import toast from "react-hot-toast";
 
 export default function Campaigns() {
   const currentUser = JSON.parse(
@@ -290,7 +291,7 @@ const completedCount = campaigns.filter(
   });
   } catch (error) {
     console.error(error);
-    alert("Failed to update campaign status");
+    toast.error("Failed to update campaign status");
   }
 };
 
@@ -319,10 +320,10 @@ const completedCount = campaigns.filter(
       queryKey: ["campaigns"],
     });
 
-    alert("Campaign deleted successfully");
+    toast.success("Campaign deleted successfully");
   } catch (error) {
     console.error("Delete Error:", error);
-    alert("Failed to delete campaign");
+    toast.error("Failed to delete campaign");
   }
 };
 

@@ -1,3 +1,4 @@
+import toast from "react-hot-toast";
 import useFunnel from "../hooks/queries/useFunnel";
 
 export default function PipelineFunnel() {
@@ -26,7 +27,7 @@ export default function PipelineFunnel() {
     const label = item?.label ?? "Unknown Stage";
     const value = (item?.value ?? 0).toLocaleString();
 
-    alert(`${label}: ${value}`);
+    toast.success(`${label}: ${value}`);
   };
 
   if (isLoading) {

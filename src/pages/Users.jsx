@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-
+import toast from "react-hot-toast";
 import {
   getUsers,
   createUser,
@@ -123,7 +123,7 @@ const handleCreateUser = async (e) => {
         customerId: "",
       });
 
-      alert(
+      toast.success(
         "User created successfully"
       );
     }
@@ -133,7 +133,7 @@ const handleCreateUser = async (e) => {
       error
     );
 
-    alert(
+    toast.error(
       error?.response?.data?.message ||
       "Failed to create user"
     );
@@ -151,7 +151,7 @@ const updateRole = async (userId, role) => {
     if (response?.success) {
       await fetchUsers();
 
-      alert(
+      toast.success(
         "Role updated successfully"
       );
     }
@@ -161,7 +161,7 @@ const updateRole = async (userId, role) => {
       error
     );
 
-    alert(
+    toast.error(
       error?.response?.data?.message ||
       "Failed to update role"
     );
@@ -210,7 +210,7 @@ const updateRole = async (userId, role) => {
 
       await fetchUsers();
 
-      alert(
+      toast.success(
         "Integrations updated successfully"
       );
     } catch (error) {
@@ -219,7 +219,7 @@ const updateRole = async (userId, role) => {
         error
       );
 
-      alert(
+      toast.error(
         "Failed to update integrations"
       );
     }

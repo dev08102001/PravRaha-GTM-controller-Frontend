@@ -304,6 +304,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 import api from "../services/api";
 import { getCustomers } from "../services/customerService";
 import { normalizeRole } from "../utils/roleUtils";
@@ -490,7 +491,7 @@ const mutation = useMutation({
       queryKey: ["campaigns"],
     });
 
-    alert(
+    toast.success(
       campaign
         ? "Campaign updated successfully"
         : "Campaign launched successfully"
@@ -502,7 +503,7 @@ const mutation = useMutation({
   onError: (error) => {
     console.error(error);
 
-    alert(
+    toast.error(
       error?.response?.data?.message ||
       error?.message ||
       "Failed to launch campaign"
@@ -630,12 +631,12 @@ useEffect(() => {
 
 const handleLaunchCampaign = () => {
   if (!campaignName.trim() || !goal.trim()) {
-    alert("Please fill in Campaign Name and Goal");
+    toast.error("Please fill in Campaign Name and Goal");
     return;
   }
 
   if (currentRole === "admin" && !customerId) {
-    alert("Select Customer");
+    toast.error("Select Customer");
     return;
   }
 
