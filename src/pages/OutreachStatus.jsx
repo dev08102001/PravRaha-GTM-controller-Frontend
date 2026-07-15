@@ -364,7 +364,6 @@ export default function OutreachStatus() {
 
   const [composerMsg, setComposerMsg] = useState(null);
   const [replyingId, setReplyingId] = useState(null);
-  const [syncingReplies, setSyncingReplies] = useState(false);
 
   // Which stat card is selected. "ALL" = every sent email.
   const [filter, setFilter] = useState("ALL");
@@ -376,23 +375,18 @@ export default function OutreachStatus() {
     return () => clearInterval(id);
   }, []);
 
-  // Poll Gmail for replies so Replied section updates automatically.
+  // Background Gmail reply sync (runs quietly — not shown in the UI).
   useEffect(() => {
     let cancelled = false;
 
     const runSync = async () => {
       try {
-        setSyncingReplies(true);
-        const res = await syncOutreachReplies();
-        if (!cancelled && res?.replied > 0) {
-          await queryClient.invalidateQueries({ queryKey: ["outreach"] });
-        } else if (!cancelled) {
+        await syncOutreachReplies();
+        if (!cancelled) {
           await queryClient.invalidateQueries({ queryKey: ["outreach"] });
         }
       } catch (err) {
         console.warn("Reply sync failed:", err?.message || err);
-      } finally {
-        if (!cancelled) setSyncingReplies(false);
       }
     };
 
@@ -493,40 +487,6 @@ export default function OutreachStatus() {
 
   return (
     <div className="space-y-7">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-gray-400">
-          Replies from Gmail are detected automatically and shown under{" "}
-          <span className="text-emerald-300">Replied</span>
-          {syncingReplies ? " · syncing…" : ""}.
-        </p>
-        <button
-          type="button"
-          disabled={syncingReplies}
-          onClick={async () => {
-            try {
-              setSyncingReplies(true);
-              const res = await syncOutreachReplies();
-              await refresh();
-              toast.success(
-                res?.message ||
-                  `Reply sync complete: ${res?.replied || 0} new replies`
-              );
-            } catch (err) {
-              toast.error(
-                err?.response?.data?.message ||
-                  err?.message ||
-                  "Failed to sync replies"
-              );
-            } finally {
-              setSyncingReplies(false);
-            }
-          }}
-          className="shrink-0 text-xs rounded-lg border border-slate-600 px-3 py-1.5 text-gray-300 hover:text-white hover:border-slate-500 disabled:opacity-50"
-        >
-          {syncingReplies ? "Syncing…" : "Sync replies"}
-        </button>
-      </div>
-
       {/* Stat cards — click to filter the table below */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard

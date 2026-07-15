@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 
 import useOutreach from "../hooks/queries/useOutreach";
 import SendSuccessModal from "../components/outreach/SendSuccessModal";
@@ -23,6 +24,14 @@ const SEQUENCE_LABELS = [
   "Follow-up 6",
 ];
 
+const MAX_FOLLOW_UPS = 6;
+
+const clampMaxFollowUps = (value, fallback = MAX_FOLLOW_UPS) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(MAX_FOLLOW_UPS, Math.max(0, Math.round(n)));
+};
+
 const firstNameOf = (name = "") =>
   String(name || "")
     .trim()
@@ -33,38 +42,157 @@ const withRePrefix = (subject) => {
   return s.toLowerCase().startsWith("re:") ? s : `Re: ${s}`;
 };
 
-const FOLLOW_UP_OPENERS = [
-  "I wanted to follow up on my previous email",
-  "Just circling back on my note",
-  "I know timing can be tricky — bumping this up in case it got buried",
-  "Quick nudge in case my earlier note slipped through the cracks",
-  "Sharing one last gentle follow-up on this",
-  "Final note from me on this thread — happy to close the loop either way",
-];
-
-const buildLocalFollowUpBody = (msg, followUpIndex) => {
-  const opener =
-    FOLLOW_UP_OPENERS[Math.min(followUpIndex, FOLLOW_UP_OPENERS.length - 1)];
-  const companyBit = msg.company ? ` regarding ${msg.company}` : "";
-  return `Hi ${firstNameOf(msg.name)},
-
-${opener}${companyBit}. I know things get busy, so I wanted to bring this back to the top of your inbox.
-
-Would you be open to a quick chat this week? Happy to work around your schedule.
-
-Best regards,
-PravRaha Team`;
+const nicheOf = (msg = {}) => {
+  const raw = String(
+    msg.niche || msg.industry || msg.campaignGoal || msg.goal || ""
+  )
+    .replace(/\s+/g, " ")
+    .trim();
+  if (raw) {
+    const cut = raw.slice(0, 48);
+    const lastSpace = cut.lastIndexOf(" ");
+    const short =
+      raw.length > 48 && lastSpace > 18 ? cut.slice(0, lastSpace) : cut;
+    return short.replace(/[.,;:]+$/g, "").toLowerCase();
+  }
+  const ctx = String(msg.context || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (ctx) {
+    return (
+      ctx.split(" ").slice(0, 4).join(" ").replace(/[.,;:]+$/g, "").toLowerCase() ||
+      "B2B sales"
+    );
+  }
+  return "B2B sales";
 };
 
-/** Normalize / backfill a 7-step sequence for UI display. */
+const resolveFollowUpTemplateIndex = (followUpIndex, totalFollowUps = 5) => {
+  const total = Math.max(1, Number(totalFollowUps) || 1);
+  const idx = Math.max(0, Number(followUpIndex) || 0);
+  if (idx >= total - 1) return 4;
+  if (total === 1) return 4;
+  if (total === 2) return 0;
+  if (total === 3) return idx === 0 ? 0 : 1;
+  if (total === 4) return [0, 1, 2][idx] ?? 2;
+  if (total === 5) return Math.min(idx, 3);
+  return Math.min(idx, 3);
+};
+
+const buildLocalFollowUpSubject = (msg, followUpIndex, totalFollowUps = 5) => {
+  const firstName = firstNameOf(msg.name);
+  const templateIndex = resolveFollowUpTemplateIndex(
+    followUpIndex,
+    totalFollowUps
+  );
+  const base =
+    String(msg.subject || "")
+      .replace(/^re:\s*/i, "")
+      .trim() || `5 Qualified leads for ${nicheOf(msg)}`;
+
+  switch (templateIndex) {
+    case 0:
+      return withRePrefix(base);
+    case 1:
+      return `Re: Sincere meeting request ${firstName}`;
+    case 2:
+      return `Re: Any update for me ${firstName}?`;
+    case 3:
+      return `Re: Please acknowledge ${firstName}`;
+    case 4:
+    default:
+      return "Re: :(";
+  }
+};
+
+/** Founder follow-up arc — last of N always uses the break-up mail. */
+const buildLocalFollowUpBody = (msg, followUpIndex, totalFollowUps = 5) => {
+  const firstName = firstNameOf(msg.name);
+  const templateIndex = resolveFollowUpTemplateIndex(
+    followUpIndex,
+    totalFollowUps
+  );
+
+  switch (templateIndex) {
+    case 0:
+      return `${firstName},
+
+Any thoughts?
+
+What's your no-show rate on booked meetings, and what's your average cost per qualified meeting?
+
+I've lived in those numbers for a while — happy to compare notes if useful.
+
+Thanks,
+`;
+    case 1:
+      return `Hello ${firstName},
+
+Hiring SDRs is expensive. Training them takes time. Managing them takes even more.
+
+The folks I work with have carried quota themselves — some for a long time — and they bring their own tools, so that's not another line item on your side.
+
+Would you be open to a brief conversation?
+`;
+    case 2:
+      return `${firstName},
+
+One thing most agencies won't admit: the founder sells you, then disappears.
+
+Not how I work. I stay on the account. Happy to walk you through how we keep qualified conversations moving without the usual bait-and-switch.
+`;
+    case 3:
+      return `${firstName},
+
+I'm not going to keep showing up in your inbox if this isn't a fit. One word does it — yes, later, or no. Any of those is fine by me and saves us both time.
+
+Which is it?
+`;
+    case 4:
+    default:
+      return `${firstName},
+
+I'll stop here. Assuming this isn't a priority right now.
+
+If things change and you want a more predictable way to get qualified meetings on the calendar without hiring more SDRs, happy to reconnect.
+
+Take care,
+`;
+  }
+};
+
+/** Normalize / backfill sequence for UI using the contact's chosen follow-up count. */
 const getEmailSequence = (msg) => {
-  if (Array.isArray(msg.emailSequence) && msg.emailSequence.length === 7) {
+  const maxFollowUps = clampMaxFollowUps(msg.maxFollowUps, MAX_FOLLOW_UPS);
+  const targetLength = 1 + maxFollowUps;
+
+  if (
+    Array.isArray(msg.emailSequence) &&
+    msg.emailSequence.length === targetLength
+  ) {
     return msg.emailSequence;
+  }
+
+  if (Array.isArray(msg.emailSequence) && msg.emailSequence.length > 0) {
+    // Fill missing steps with position-aware copy when count was just changed locally.
+    const sliced = msg.emailSequence.slice(0, targetLength);
+    while (sliced.length < targetLength) {
+      const step = sliced.length;
+      sliced.push({
+        step,
+        label: SEQUENCE_LABELS[step] || `Step ${step}`,
+        subject: buildLocalFollowUpSubject(msg, step - 1, maxFollowUps),
+        body: buildLocalFollowUpBody(msg, step - 1, maxFollowUps),
+        status:
+          msg.replyReceived || msg.sequenceCancelled ? "CANCELLED" : "PENDING",
+      });
+    }
+    return sliced;
   }
 
   const initialSubject = msg.subject || "Hello";
   const initialBody = msg.body || "";
-  return SEQUENCE_LABELS.map((label, step) => {
+  return SEQUENCE_LABELS.slice(0, targetLength).map((label, step) => {
     if (step === 0) {
       return {
         step: 0,
@@ -78,11 +206,25 @@ const getEmailSequence = (msg) => {
     return {
       step,
       label,
-      subject: withRePrefix(initialSubject),
-      body: buildLocalFollowUpBody(msg, step - 1),
+      subject: buildLocalFollowUpSubject(msg, step - 1, maxFollowUps),
+      body: buildLocalFollowUpBody(msg, step - 1, maxFollowUps),
       status: msg.replyReceived || msg.sequenceCancelled ? "CANCELLED" : "PENDING",
     };
   });
+};
+
+const stripHtmlPreview = (htmlOrText = "") => {
+  const raw = String(htmlOrText || "");
+  if (!/<\/?[a-z][\s\S]*>/i.test(raw)) return raw;
+  return raw
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .trim();
 };
 
 const stepStatusStyles = (status) => {
@@ -115,8 +257,33 @@ export default function Outreach() {
   const [confirmMsg, setConfirmMsg] = useState(null);
   // Per-card selected sequence step (0–6). Defaults to Initial Email.
   const [selectedStepById, setSelectedStepById] = useState({});
+  const [savingFollowUpsId, setSavingFollowUpsId] = useState(null);
 
   const getSelectedStep = (msgId) => selectedStepById[msgId] ?? 0;
+
+  const changeMaxFollowUps = async (msg, nextValue) => {
+    const maxFollowUps = clampMaxFollowUps(nextValue);
+    if (maxFollowUps === clampMaxFollowUps(msg.maxFollowUps)) return;
+
+    try {
+      setSavingFollowUpsId(msg._id);
+      await updateOutreachMessage(msg._id, { maxFollowUps });
+      await queryClient.invalidateQueries({ queryKey: ["outreach"] });
+
+      // Keep selected step inside the new sequence range.
+      const maxStep = maxFollowUps; // 0..N
+      if (getSelectedStep(msg._id) > maxStep) {
+        setSelectedStepById((prev) => ({ ...prev, [msg._id]: 0 }));
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error(
+        error?.response?.data?.message || "Failed to update follow-up count"
+      );
+    } finally {
+      setSavingFollowUpsId(null);
+    }
+  };
 
   const selectSequenceStep = (msg, stepIndex) => {
     setSelectedStepById((prev) => ({ ...prev, [msg._id]: stepIndex }));
@@ -411,76 +578,220 @@ export default function Outreach() {
               </div>
             </div>
 
-            {/* Subject */}
-            <div className="mb-4">
-              <h3 className="text-gray-400 text-sm mb-2 font-semibold">
-                SUBJECT:
-                <span className="ml-2 font-normal text-cyan-400/80 normal-case tracking-normal">
-                  {step?.label || SEQUENCE_LABELS[stepIndex]}
-                </span>
-              </h3>
+            {/* Sequence plan — choose length first so the mail arc matches */}
+            <div className="mb-4 rounded-xl border border-[#2A3550] bg-[#0E1422]/20 p-4 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-wider text-gray-500">
+                    Follow-ups to send
+                  </p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">
+                    Whole thread wraps in{" "}
+                    <span className="text-gray-300">
+                      {1 + clampMaxFollowUps(msg.maxFollowUps)} email
+                      {1 + clampMaxFollowUps(msg.maxFollowUps) === 1 ? "" : "s"}
+                    </span>{" "}
+                    (initial + {clampMaxFollowUps(msg.maxFollowUps)} follow-up
+                    {clampMaxFollowUps(msg.maxFollowUps) === 1 ? "" : "s"}). Last
+                    follow-up closes the loop.
+                  </p>
+                </div>
 
-              {editingId === msg._id ? (
-                <input
-                  value={editSubject}
-                  onChange={(e) => setEditSubject(e.target.value)}
-                  disabled={stepCancelled || stepSent}
-                  className="w-full bg-[#1C2538] border border-[#2A3550] rounded-lg px-3 py-2 font-semibold tracking-wide text-white outline-none focus:border-cyan-500 disabled:opacity-60"
-                />
-              ) : (
-                <div className="font-semibold tracking-wide">{displaySubject}</div>
-              )}
-            </div>
-
-            {/* Body */}
-            {editingId === msg._id ? (
-              // <textarea
-              //   value={editBody}
-              //   onChange={(e) => setEditBody(e.target.value)}
-              //   rows={6}
-              //   disabled={stepCancelled || stepSent}
-              //   className="w-full bg-[#1C2538] p-5 rounded-lg leading-8 text-gray-200 border border-[#2A3550] outline-none focus:border-cyan-500 disabled:opacity-60"
-              // />
-               <div className="rounded-lg border border-[#2A3550] overflow-hidden bg-[#1C2538]">
-              <TiptapEditor value={editBody} onChange={setEditBody} />
-            </div>
-            ) : (
-              <div className="bg-[#1C2538] p-5 rounded-lg whitespace-pre-line leading-8 text-gray-200">
-                {displayBody}
-              </div>
-            )}
-
-            {/* Recipient email */}
-            <div className="mt-4">
-              <label className="text-xs uppercase tracking-wider text-gray-500">
-                Recipient Email
-              </label>
-              {editingId === msg._id ? (
-                <input
-                  type="email"
-                  value={editEmail}
-                  onChange={(e) => setEditEmail(e.target.value)}
-                  placeholder="Replace with your test email (e.g. you@example.com)"
-                  className="mt-1 w-full bg-[#1C2538] border border-[#2A3550] rounded-lg px-3 py-2 text-white outline-none focus:border-cyan-500"
-                />
-              ) : (
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <span className="text-cyan-300 text-sm">
-                    {msg.email || "No email on file — edit before sending"}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={
+                      savingFollowUpsId === msg._id ||
+                      clampMaxFollowUps(msg.maxFollowUps) <= 0 ||
+                      msg.replyReceived ||
+                      msg.sequenceCancelled
+                    }
+                    onClick={() =>
+                      changeMaxFollowUps(
+                        msg,
+                        clampMaxFollowUps(msg.maxFollowUps) - 1
+                      )
+                    }
+                    className="w-8 h-8 rounded-lg border border-[#2A3550] text-gray-200 hover:border-cyan-500/50 hover:text-white disabled:opacity-40"
+                    title="Fewer follow-ups"
+                  >
+                    −
+                  </button>
+                  <span className="min-w-[2rem] text-center text-lg font-semibold text-cyan-300">
+                    {clampMaxFollowUps(msg.maxFollowUps)}
                   </span>
                   <button
                     type="button"
-                    onClick={() => startEdit(msg)}
-                    className="text-xs text-gray-400 hover:text-white underline"
+                    disabled={
+                      savingFollowUpsId === msg._id ||
+                      clampMaxFollowUps(msg.maxFollowUps) >= MAX_FOLLOW_UPS ||
+                      msg.replyReceived ||
+                      msg.sequenceCancelled
+                    }
+                    onClick={() =>
+                      changeMaxFollowUps(
+                        msg,
+                        clampMaxFollowUps(msg.maxFollowUps) + 1
+                      )
+                    }
+                    className="w-8 h-8 rounded-lg border border-[#2A3550] text-gray-200 hover:border-cyan-500/50 hover:text-white disabled:opacity-40"
+                    title="More follow-ups"
                   >
-                    Edit email
+                    +
                   </button>
+                  <select
+                    value={clampMaxFollowUps(msg.maxFollowUps)}
+                    disabled={
+                      savingFollowUpsId === msg._id ||
+                      msg.replyReceived ||
+                      msg.sequenceCancelled
+                    }
+                    onChange={(e) =>
+                      changeMaxFollowUps(msg, Number(e.target.value))
+                    }
+                    className="ml-1 rounded-lg border border-[#2A3550] bg-[#0E1422] px-2 py-1.5 text-xs text-gray-200 disabled:opacity-40"
+                    title="Choose follow-up count"
+                  >
+                    {Array.from({ length: MAX_FOLLOW_UPS + 1 }, (_, n) => (
+                      <option key={n} value={n}>
+                        {n === 0
+                          ? "0 follow-ups (initial only)"
+                          : `${n} follow-up${n === 1 ? "" : "s"}`}
+                      </option>
+                    ))}
+                  </select>
+                  {savingFollowUpsId === msg._id && (
+                    <span className="text-[11px] text-gray-500">Saving…</span>
+                  )}
                 </div>
+              </div>
+
+              <div>
+                <p className="text-xs uppercase tracking-wider text-gray-500 mb-2">
+                  Email Sequence
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {sequence.map((seqStep) => {
+                    const active = stepIndex === seqStep.step;
+                    const status = String(seqStep.status || "PENDING").toUpperCase();
+                    return (
+                      <button
+                        key={seqStep.step}
+                        type="button"
+                        onClick={() => selectSequenceStep(msg, seqStep.step)}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                          active
+                            ? "bg-cyan-600 text-white border-cyan-500 shadow-sm"
+                            : stepStatusStyles(status)
+                        } ${!active ? "hover:border-cyan-500/50 hover:text-white" : ""}`}
+                        title={`${seqStep.label} — ${status}`}
+                      >
+                        {seqStep.label}
+                        {status !== "PENDING" && (
+                          <span className="ml-1 opacity-70">
+                            ·{" "}
+                            {status === "CANCELLED"
+                              ? "Killed"
+                              : status.charAt(0) + status.slice(1).toLowerCase()}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                {stepCancelled && (
+                  <p className="text-xs text-red-300/90 mt-2">
+                    This step was cancelled after a positive reply. Remaining
+                    follow-ups will not be sent.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Compose surface — reads like a real mail draft */}
+            <div className="rounded-xl border border-[#2A3550] overflow-hidden bg-[#0B101C]">
+              <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 border-b border-[#2A3550] bg-[#121A2B]">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-[11px] uppercase tracking-wider text-gray-500 shrink-0">
+                    Draft
+                  </span>
+                  <span className="text-sm text-gray-200 truncate">
+                    {step?.label || SEQUENCE_LABELS[stepIndex]}
+                  </span>
+                </div>
+                <span className="text-[11px] text-cyan-300/90 tabular-nums">
+                  Email {stepIndex + 1} of {sequence.length}
+                  {stepIndex > 0
+                    ? ` · Follow-up ${stepIndex} of ${clampMaxFollowUps(msg.maxFollowUps)}`
+                    : " · First touch"}
+                  {stepIndex > 0 &&
+                  stepIndex === sequence.length - 1 &&
+                  clampMaxFollowUps(msg.maxFollowUps) > 0
+                    ? " · Closes thread"
+                    : ""}
+                </span>
+              </div>
+
+              <div className="divide-y divide-[#2A3550]">
+                <div className="grid grid-cols-[4.5rem_1fr] gap-2 px-4 py-2.5 text-sm items-center">
+                  <span className="text-gray-500">To</span>
+                  {editingId === msg._id ? (
+                    <input
+                      type="email"
+                      value={editEmail}
+                      onChange={(e) => setEditEmail(e.target.value)}
+                      placeholder="name@company.com"
+                      className="w-full bg-transparent text-cyan-200 outline-none placeholder:text-gray-600"
+                    />
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2 min-w-0">
+                      <span className="text-cyan-300 truncate">
+                        {msg.email || "No email on file — edit before sending"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => startEdit(msg)}
+                        className="text-[11px] text-gray-500 hover:text-white underline shrink-0"
+                      >
+                        Change
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-[4.5rem_1fr] gap-2 px-4 py-2.5 text-sm items-center">
+                  <span className="text-gray-500">Subject</span>
+                  {editingId === msg._id ? (
+                    <input
+                      value={editSubject}
+                      onChange={(e) => setEditSubject(e.target.value)}
+                      disabled={stepCancelled || stepSent}
+                      className="w-full bg-transparent font-medium text-white outline-none disabled:opacity-60"
+                    />
+                  ) : (
+                    <div className="font-medium text-gray-100">{displaySubject}</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="px-1 pb-1">
+                {editingId === msg._id ? (
+                  <div className="rounded-b-xl overflow-hidden bg-[#121A2B] border-t border-[#2A3550]">
+                    <TiptapEditor value={editBody} onChange={setEditBody} />
+                  </div>
+                ) : (
+                  <div className="px-4 py-5 whitespace-pre-line leading-7 text-[15px] text-gray-200 font-[system-ui,Segoe_UI,Helvetica,Arial,sans-serif] min-h-[9rem]">
+                    {stripHtmlPreview(displayBody)}
+                  </div>
+                )}
+              </div>
+
+              {editingId === msg._id && (
+                <p className="px-4 pb-3 text-[11px] text-amber-400/90">
+                  Tip: keep it short and conversational — swap the To address to
+                  a test inbox before Approve & Send.
+                </p>
               )}
-              <p className="text-xs text-amber-400/90 mt-1">
-                Change this to a test address before sending so real contacts are
-                not emailed.
-              </p>
             </div>
 
             {/* Context */}
@@ -549,48 +860,6 @@ export default function Outreach() {
                       ? `🔗 ${msg.linkedinUrl}`
                       : "No contact channel on file"}
                 </span>
-              )}
-            </div>
-
-            {/* 7-step email sequence — below status, above actions */}
-            <div className="mt-4">
-              <p className="text-xs uppercase tracking-wider text-gray-500 mb-2">
-                Email Sequence
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {sequence.map((seqStep) => {
-                  const active = stepIndex === seqStep.step;
-                  const status = String(seqStep.status || "PENDING").toUpperCase();
-                  return (
-                    <button
-                      key={seqStep.step}
-                      type="button"
-                      onClick={() => selectSequenceStep(msg, seqStep.step)}
-                      className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                        active
-                          ? "bg-cyan-600 text-white border-cyan-500 shadow-sm"
-                          : stepStatusStyles(status)
-                      } ${!active ? "hover:border-cyan-500/50 hover:text-white" : ""}`}
-                      title={`${seqStep.label} — ${status}`}
-                    >
-                      {seqStep.label}
-                      {status !== "PENDING" && (
-                        <span className="ml-1 opacity-70">
-                          ·{" "}
-                          {status === "CANCELLED"
-                            ? "Killed"
-                            : status.charAt(0) + status.slice(1).toLowerCase()}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-              {stepCancelled && (
-                <p className="text-xs text-red-300/90 mt-2">
-                  This step was cancelled after a positive reply. Remaining
-                  follow-ups will not be sent.
-                </p>
               )}
             </div>
 
@@ -703,7 +972,7 @@ export default function Outreach() {
                       {msg.replyReceived || msg.sequenceCancelled
                         ? " • Sequence stopped (replied)"
                         : Array.isArray(msg.emailSequence)
-                          ? ` • ${msg.emailSequence.filter((s) => s.status === "SENT").length}/7 sent`
+                          ? ` • ${msg.emailSequence.filter((s) => s.status === "SENT").length}/${msg.emailSequence.length} sent`
                           : ""}
                     </p>
                   </div>
