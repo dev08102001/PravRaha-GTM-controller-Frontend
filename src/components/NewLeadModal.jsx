@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import {
   createLead,
   updateLead,
@@ -131,7 +132,7 @@ useEffect(() => {
       onSuccess();
     } catch (error) {
       console.error(error);
-      alert(
+      toast.error(
         error?.response?.data?.message ||
           "Failed"
       );

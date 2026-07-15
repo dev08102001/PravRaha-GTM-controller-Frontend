@@ -22,13 +22,14 @@
 // }
 
 
+import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 
 export default function PipelineHeader({ stats }) {
   const navigate = useNavigate();
 
   const handleFilter = () => {
-    alert("Filter clicked");
+    toast.success("Filter clicked");
   };
 
   const handleCampaigns = () => {

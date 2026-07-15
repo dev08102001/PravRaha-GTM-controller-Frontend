@@ -1,4 +1,5 @@
 import { useState } from "react";
+import toast from "react-hot-toast";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../services/api";
 
@@ -16,17 +17,17 @@ export default function ResetPassword() {
     const trimmedPassword = password.trim();
 
     if (!trimmedPassword) {
-      alert("Please enter a new password.");
+      toast.error("Please enter a new password.");
       return;
     }
 
     if (trimmedPassword.length < 8) {
-      alert("Password must be at least 8 characters long.");
+      toast.error("Password must be at least 8 characters long.");
       return;
     }
 
     if (trimmedPassword !== confirmPassword.trim()) {
-      alert("Passwords do not match.");
+      toast.error("Passwords do not match.");
       return;
     }
 
@@ -38,11 +39,11 @@ export default function ResetPassword() {
         password: trimmedPassword,
       });
 
-      alert(res.data.message);
+      toast.success(res.data.message);
 
       navigate("/login");
     } catch (error) {
-      alert(
+      toast.error(
         error?.response?.data?.message ||
           "Password reset failed"
       );

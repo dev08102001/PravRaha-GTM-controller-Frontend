@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import {
   getCustomers,
   createCustomer,
@@ -107,7 +108,7 @@ export default function Customers() {
 
         setShowModal(false);
 
-        alert(
+        toast.success(
           "Customer created successfully"
         );
       }
@@ -117,7 +118,7 @@ export default function Customers() {
         error
       );
 
-      alert(
+      toast.error(
         "Failed to create customer"
       );
     }
@@ -142,7 +143,7 @@ export default function Customers() {
         )
       );
 
-      alert(
+      toast.success(
         "Customer deleted successfully"
       );
     } catch (error) {
@@ -151,7 +152,7 @@ export default function Customers() {
         error
       );
 
-      alert(
+      toast.error(
         "Failed to delete customer"
       );
     }
@@ -170,7 +171,7 @@ export default function Customers() {
     if (response?.success) {
       fetchCustomers();
 
-      alert(
+      toast.success(
         "Manager assigned successfully"
       );
     }
@@ -180,7 +181,7 @@ export default function Customers() {
       error
     );
 
-    alert(
+    toast.error(
       error?.response?.data?.message ||
       "Failed to assign manager"
     );

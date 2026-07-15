@@ -4,6 +4,7 @@ import {
   QueryClient,
   QueryClientProvider,
 } from "@tanstack/react-query";
+import { Toaster } from "react-hot-toast";
  
 import AppRoutes from "./routes/AppRoutes";
 import "./styles/global.css";
@@ -22,6 +23,33 @@ ReactDOM.createRoot(document.getElementById("root")).render(
   <QueryClientProvider client={queryClient}>
     <BrowserRouter>
       <AppRoutes />
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: "#0F172A",
+            color: "#F8FAFC",
+            border: "1px solid rgba(148, 163, 184, 0.2)",
+            boxShadow: "0 10px 30px rgba(2, 6, 23, 0.25)",
+            borderRadius: "12px",
+            padding: "12px 14px",
+            fontSize: "14px",
+          },
+          success: {
+            iconTheme: {
+              primary: "#10B981",
+              secondary: "#F8FAFC",
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: "#EF4444",
+              secondary: "#F8FAFC",
+            },
+          },
+        }}
+      />
     </BrowserRouter>
   </QueryClientProvider>
 );

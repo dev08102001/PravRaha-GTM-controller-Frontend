@@ -151,14 +151,14 @@ export default function Outreach() {
 
       setConfirmMsg(null);
       if (res?.scheduled) {
-        alert(
+        toast.success(
           (res?.message || "Message scheduled.") +
             " Saved in Outreach Status."
         );
         return;
       }
       if (res?.queued) {
-        alert(
+        toast.success(
           (res?.message || "Message queued for the email worker.") +
             " Track progress in Outreach Status."
         );
@@ -170,9 +170,9 @@ export default function Outreach() {
 
       if (error?.response?.status === 404) {
         await queryClient.invalidateQueries({ queryKey: ["outreach"] });
-        alert("This message is no longer available. The queue has been refreshed.");
+        toast.error("This message is no longer available. The queue has been refreshed.");
       } else {
-        alert(error?.response?.data?.message || "Failed to send message");
+        toast.error(error?.response?.data?.message || "Failed to send message");
       }
     } finally {
       setSendingId(null);
@@ -195,12 +195,12 @@ export default function Outreach() {
       });
     } catch (error) {
       console.error(error);
-      alert("Failed to reject message");
+      toast.error("Failed to reject message");
     }
   };
 
   const sendAllMessages = async () => {
-    alert(
+    toast.success(
       "Automatic bulk/daily email scheduling is disabled for testing.\n\nEdit each recipient email in the queue, then use Approve & Send on individual messages."
     );
   };
@@ -226,7 +226,7 @@ export default function Outreach() {
 
       const email = String(editEmail || "").trim();
       if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        alert("Please enter a valid recipient email address.");
+        toast.error("Please enter a valid recipient email address.");
         return;
       }
 
@@ -244,7 +244,7 @@ export default function Outreach() {
       cancelEdit();
     } catch (error) {
       console.error(error);
-      alert(error?.response?.data?.message || "Failed to save message");
+      toast.error(error?.response?.data?.message || "Failed to save message");
     } finally {
       setSaving(false);
     }
@@ -253,11 +253,11 @@ export default function Outreach() {
   const openConfirmSend = (msg) => {
     const { stepIndex, step } = getActiveStepContent(msg);
     if (step?.status === "CANCELLED") {
-      alert("This email step was cancelled and cannot be sent.");
+      toast.error("This email step was cancelled and cannot be sent.");
       return;
     }
     if (step?.status === "SENT") {
-      alert("This email step was already sent.");
+      toast.error("This email step was already sent.");
       return;
     }
     setConfirmMsg({

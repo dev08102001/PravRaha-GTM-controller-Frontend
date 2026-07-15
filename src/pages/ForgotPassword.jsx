@@ -1,4 +1,5 @@
 import { useState } from "react";
+import toast from "react-hot-toast";
 import { Link } from "react-router-dom";
 import api from "../services/api";
 
@@ -12,7 +13,7 @@ export default function ForgotPassword() {
     const trimmedEmail = email.trim();
 
     if (!trimmedEmail) {
-      alert("Please enter your email address.");
+      toast.error("Please enter your email address.");
       return;
     }
 
@@ -23,10 +24,10 @@ export default function ForgotPassword() {
         email: trimmedEmail,
       });
 
-      alert(res.data.message);
+      toast.success(res.data.message);
       setEmail("");
     } catch (error) {
-      alert(
+      toast.error(
         error?.response?.data?.message ||
           "Failed to send reset link"
       );

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import { saveSignalFeed } from "../../services/signalService";
 import GoalInput from "./GoalInput";
@@ -36,7 +37,7 @@ export default function CampaignGoalCard() {
   const handleLaunch = async () => {
     const trimmed = goal.trim();
     if (!trimmed) {
-      alert("Please enter a campaign goal");
+      toast.error("Please enter a campaign goal");
       return;
     }
 

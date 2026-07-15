@@ -3,6 +3,7 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 
 import {
   getICP,
@@ -50,7 +51,7 @@ export const useSaveICP = () => {
       queryClient.invalidateQueries({ queryKey: ["top-companies"] });
       queryClient.invalidateQueries({ queryKey: ["signal-feed"] });
 
-      alert("ICP Saved Successfully");
+      toast.success("ICP Saved Successfully");
     },
   });
 };
@@ -66,7 +67,7 @@ export const useDeleteICP = () => {
       queryClient.invalidateQueries({ queryKey: ["icp"] });
       queryClient.invalidateQueries({ queryKey: ["outreach"] });
       queryClient.invalidateQueries({ queryKey: ["signal-feed"] });
-      alert("ICP Deleted Successfully");
+      toast.success("ICP Deleted Successfully");
     },
   });
 };

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import toast from "react-hot-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
 import useOutreach from "../hooks/queries/useOutreach";
@@ -257,7 +258,7 @@ function FollowUpComposer({ msg, onClose, onSent }) {
       onSent();
     } catch (error) {
       console.error(error);
-      alert(error?.response?.data?.message || "Failed to send follow-up email");
+      toast.error(error?.response?.data?.message || "Failed to send follow-up email");
     } finally {
       setSending(false);
     }
@@ -462,13 +463,13 @@ export default function OutreachStatus() {
       await refresh();
       const cancelled = res?.cancelled;
       if (cancelled > 0) {
-        alert(
+        toast.success(
           `Marked as replied. ${cancelled} remaining sequence email(s) cancelled.`
         );
       }
     } catch (error) {
       console.error(error);
-      alert("Failed to mark as replied");
+      toast.error("Failed to mark as replied");
     } finally {
       setReplyingId(null);
     }
@@ -506,12 +507,12 @@ export default function OutreachStatus() {
               setSyncingReplies(true);
               const res = await syncOutreachReplies();
               await refresh();
-              alert(
+              toast.success(
                 res?.message ||
                   `Reply sync complete: ${res?.replied || 0} new replies`
               );
             } catch (err) {
-              alert(
+              toast.error(
                 err?.response?.data?.message ||
                   err?.message ||
                   "Failed to sync replies"

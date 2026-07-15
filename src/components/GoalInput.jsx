@@ -128,6 +128,7 @@
 //     </div>
 //   );
 // }
+import toast from "react-hot-toast";
 import useGoal from "../hooks/queries/useGoal";
 
 export default function GoalInput() {
@@ -138,11 +139,11 @@ export default function GoalInput() {
   } = useGoal();
 
   const handleTemplateClick = (template) => {
-    alert(`Template Selected: ${template}`);
+    toast.success(`Template Selected: ${template}`);
   };
 
   const handleLaunchAgents = () => {
-    alert("Launch Agents clicked");
+    toast.success("Launch Agents clicked");
   };
 
   if (isLoading) {

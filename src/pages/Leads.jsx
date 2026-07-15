@@ -1,4 +1,5 @@
 import { useState } from "react";
+import toast from "react-hot-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
 import useLeads from "../hooks/queries/useLeads";
@@ -53,11 +54,11 @@ export default function Leads() {
       });
       queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
 
-      alert("Lead deleted successfully");
+      toast.success("Lead deleted successfully");
     } catch (error) {
       console.error(error);
 
-      alert(
+      toast.error(
         error?.response?.data?.message ||
           "Failed to delete lead"
       );

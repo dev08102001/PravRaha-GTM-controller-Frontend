@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 
 import ICPSection from "../components/ICP/ICPSection";
@@ -89,7 +90,7 @@ export default function ICPConfig() {
     }
 
     if (missing.length > 0) {
-      alert(
+      toast.error(
         "Please select at least one option in every section before saving:\n\n" +
           missing.map((title) => `• ${title}`).join("\n")
       );

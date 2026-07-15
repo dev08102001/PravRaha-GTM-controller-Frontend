@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
+import toast from "react-hot-toast";
 import api from "../services/api";
 
 import logo from "../assets/logo.png";
@@ -38,7 +39,7 @@ export default function Signup() {
         formData
       );
 
-      alert(
+      toast.success(
         response.data.message ||
           "Registration Successful"
       );
@@ -47,7 +48,7 @@ export default function Signup() {
     } catch (error) {
       console.error(error);
 
-      alert(
+      toast.error(
         error?.response?.data?.message ||
           "Registration Failed"
       );

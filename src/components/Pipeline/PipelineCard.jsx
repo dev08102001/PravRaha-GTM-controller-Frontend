@@ -87,11 +87,12 @@
 //     </div>
 //   );
 // }
+import toast from "react-hot-toast";
 import { getTagStyle } from "../../utils/pipelineUtils";
 
 export default function PipelineCard({ item }) {
   const handleCardClick = () => {
-    alert(`Opening ${item.company}`);
+    toast.success(`Opening ${item.company}`);
   };
 
   return (
