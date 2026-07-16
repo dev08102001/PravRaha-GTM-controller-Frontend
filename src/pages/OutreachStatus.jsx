@@ -3,7 +3,12 @@ import toast from "react-hot-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
 import useOutreach from "../hooks/queries/useOutreach";
-import { sendFollowUp, markReplied, syncOutreachReplies } from "../services/outreachService";
+import {
+  sendFollowUp,
+  markReplied,
+  syncOutreachReplies,
+  getOutreachReplies,
+} from "../services/outreachService";
 import TiptapEditor from "./TiptapEditor";
 
 /* ------------------------------------------------------------------ */
@@ -31,7 +36,6 @@ const getSectionKey = (msg, now = Date.now()) => {
   return "READY";
 };
 
-// Derive the live follow-up state from a message + the current time.
 const deriveFollowUp = (msg, now) => {
   const key = getSectionKey(msg, now);
   if (key === "REPLIED") return { key: "REPLIED", label: "Replied", ready: false };
@@ -75,7 +79,30 @@ const isTrackedOutreach = (m) => {
   );
 };
 
-// Format a millisecond gap as "18h 32m" (or "12m" / "Ready now").
+const stripHtml = (htmlOrText = "") => {
+  const raw = String(htmlOrText || "");
+  if (!raw) return "";
+  if (!/<\/?[a-z][\s\S]*>/i.test(raw)) return raw.trim();
+  return raw
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+};
+
+const replySnippet = (msg) => {
+  const text =
+    stripHtml(msg?.replyBody || msg?.replyPreview || msg?.replySubject || "") ||
+    "";
+  if (!text) return "";
+  return text.length > 140 ? `${text.slice(0, 140).trim()}…` : text;
+};
+
 const formatCountdown = (ms) => {
   if (ms <= 0) return "Ready now";
 
@@ -100,7 +127,6 @@ const getNextSequenceFollowUp = (msg) => {
   );
 };
 
-// Prefer the next pending step from the 7-email sequence when available.
 const buildFollowUpDraft = (msg) => {
   const next = getNextSequenceFollowUp(msg);
   if (next) {
@@ -130,7 +156,8 @@ ${opener}${msg.company ? ` regarding ${msg.company}` : ""}. I know things get bu
 
 Would you be open to a quick chat this week? Happy to work around your schedule.
 
-Best regards`;
+Thanks,
+`;
 
   return {
     subject,
@@ -140,7 +167,6 @@ Best regards`;
   };
 };
 
-// Deterministic avatar gradient per contact for a bit of colour variety.
 const AVATAR_GRADIENTS = [
   "from-cyan-500 to-blue-600",
   "from-fuchsia-500 to-purple-600",
@@ -174,11 +200,32 @@ const Icon = ({ path, className = "w-5 h-5" }) => (
 );
 
 const icons = {
-  mail: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></>,
-  clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
+  mail: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3 7 9 6 9-6" />
+    </>
+  ),
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </>
+  ),
   bolt: <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z" />,
-  check: <><circle cx="12" cy="12" r="9" /><path d="m8 12 3 3 5-6" /></>,
+  check: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m8 12 3 3 5-6" />
+    </>
+  ),
   send: <path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z" />,
+  inbox: (
+    <>
+      <path d="M22 12h-6l-2 3h-4l-2-3H2" />
+      <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+    </>
+  ),
 };
 
 /* ------------------------------------------------------------------ */
@@ -196,7 +243,6 @@ function StatCard({ label, value, icon, gradient, ring, text, active, onClick })
           : "border-[#22304F]"
       }`}
     >
-      {/* soft corner glow */}
       <div
         className={`absolute -right-8 -top-8 w-28 h-28 rounded-full bg-gradient-to-br ${gradient} ${
           active ? "opacity-40" : "opacity-20"
@@ -218,13 +264,175 @@ function StatCard({ label, value, icon, gradient, ring, text, active, onClick })
         </div>
       </div>
 
-      {/* active underline accent */}
       <div
         className={`absolute bottom-0 left-0 h-1 bg-gradient-to-r ${gradient} transition-all duration-300 ${
           active ? "w-full" : "w-0"
         }`}
       />
     </button>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Reply viewer — loads real saved replies from MongoDB                */
+/* ------------------------------------------------------------------ */
+
+function ReplyViewer({ msg, onClose }) {
+  const [replies, setReplies] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!msg?._id) return undefined;
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        setLoading(true);
+        setError("");
+        const data = await getOutreachReplies(msg._id);
+        if (cancelled) return;
+        setReplies(Array.isArray(data?.replies) ? data.replies : []);
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err?.response?.data?.message || "Failed to load saved replies"
+          );
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [msg?._id]);
+
+  if (!msg) return null;
+
+  const fallbackBody =
+    stripHtml(msg.replyBody || msg.replyPreview || "") || "";
+  const showFallback =
+    !loading && !error && replies.length === 0 && Boolean(fallbackBody);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="w-full max-w-2xl max-h-[85vh] flex flex-col bg-[#0E1422] border border-[#2A3550] rounded-2xl shadow-2xl overflow-hidden">
+        <div className="relative p-5 bg-gradient-to-r from-emerald-600/20 via-green-600/10 to-transparent border-b border-[#2A3550]">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 shrink-0 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center text-white shadow-lg">
+                <Icon path={icons.inbox} />
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-xl font-bold text-white truncate">
+                  Reply from {msg.name || "contact"}
+                </h2>
+                <p className="text-gray-400 text-sm truncate">
+                  {msg.email || msg.deliveredTo || "—"}
+                  {msg.replyReceivedAt
+                    ? ` • ${new Date(msg.replyReceivedAt).toLocaleString()}`
+                    : ""}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-gray-400 hover:text-white text-2xl leading-none"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          {loading && (
+            <p className="text-gray-400 text-sm py-8 text-center">
+              Loading replies from database…
+            </p>
+          )}
+
+          {error && (
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+              {error}
+            </div>
+          )}
+
+          {!loading && !error && replies.length === 0 && !showFallback && (
+            <div className="rounded-xl border border-dashed border-[#2A3550] px-4 py-10 text-center">
+              <p className="text-gray-300 font-medium">No reply content yet</p>
+              <p className="text-gray-500 text-sm mt-1">
+                Gmail sync will save the full reply here once it arrives.
+              </p>
+            </div>
+          )}
+
+          {showFallback && (
+            <article className="rounded-xl border border-emerald-500/25 bg-[#121A2B] p-4 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-400">
+                <span className="text-emerald-300 font-medium">
+                  {msg.replyFrom || msg.email || "Contact"}
+                </span>
+                {msg.replyReceivedAt && (
+                  <span>{new Date(msg.replyReceivedAt).toLocaleString()}</span>
+                )}
+              </div>
+              {msg.replySubject && (
+                <h3 className="text-white font-semibold">{msg.replySubject}</h3>
+              )}
+              <p className="text-gray-200 text-[15px] leading-7 whitespace-pre-line">
+                {fallbackBody}
+              </p>
+            </article>
+          )}
+
+          {replies.map((reply) => {
+            const body =
+              stripHtml(reply.bodyText || reply.bodyHtml || reply.snippet) ||
+              "(empty body)";
+            return (
+              <article
+                key={reply._id}
+                className="rounded-xl border border-emerald-500/25 bg-[#121A2B] p-4 space-y-2"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-400">
+                  <span className="text-emerald-300 font-medium">
+                    {reply.fromName || reply.fromEmail || "Contact"}
+                    {reply.fromEmail ? ` <${reply.fromEmail}>` : ""}
+                  </span>
+                  <span>
+                    {reply.repliedAt
+                      ? new Date(reply.repliedAt).toLocaleString()
+                      : reply.createdAt
+                        ? new Date(reply.createdAt).toLocaleString()
+                        : ""}
+                  </span>
+                </div>
+                {reply.subject && (
+                  <h3 className="text-white font-semibold">{reply.subject}</h3>
+                )}
+                <p className="text-gray-200 text-[15px] leading-7 whitespace-pre-line">
+                  {body}
+                </p>
+              </article>
+            );
+          })}
+        </div>
+
+        <div className="flex justify-end gap-3 p-4 border-t border-[#2A3550]">
+          <button
+            type="button"
+            onClick={onClose}
+            className="border border-gray-600 px-4 py-2 rounded-lg hover:bg-gray-700/40 text-gray-200"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -258,7 +466,9 @@ function FollowUpComposer({ msg, onClose, onSent }) {
       onSent();
     } catch (error) {
       console.error(error);
-      toast.error(error?.response?.data?.message || "Failed to send follow-up email");
+      toast.error(
+        error?.response?.data?.message || "Failed to send follow-up email"
+      );
     } finally {
       setSending(false);
     }
@@ -267,7 +477,6 @@ function FollowUpComposer({ msg, onClose, onSent }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
       <div className="w-full max-w-2xl bg-[#0E1422] border border-[#2A3550] rounded-2xl shadow-2xl overflow-hidden">
-        {/* Gradient header */}
         <div className="relative p-5 bg-gradient-to-r from-cyan-600/20 via-blue-600/10 to-transparent border-b border-[#2A3550]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -284,6 +493,7 @@ function FollowUpComposer({ msg, onClose, onSent }) {
               </div>
             </div>
             <button
+              type="button"
               onClick={onClose}
               className="text-gray-400 hover:text-white text-2xl leading-none"
             >
@@ -292,7 +502,6 @@ function FollowUpComposer({ msg, onClose, onSent }) {
           </div>
         </div>
 
-        {/* Body */}
         <div className="p-5 space-y-4">
           <div>
             <label className="text-xs uppercase tracking-wider text-gray-500">
@@ -318,30 +527,26 @@ function FollowUpComposer({ msg, onClose, onSent }) {
             />
           </div>
 
+          <div>
+            <label className="text-xs uppercase tracking-wider text-gray-500">
+              Email Body
+            </label>
+            <div className="mt-1 rounded-lg border border-[#2A3550] overflow-hidden">
+              <TiptapEditor value={body} onChange={setBody} />
+            </div>
           </div>
-
-
-         <label className="text-xs uppercase tracking-wider text-gray-500">
-           Email Body
-         </label>
-          <div className="mt-1">
-         <TiptapEditor
-          value={body}
-            onChange={setBody}
-         />
-       </div>
-  
         </div>
 
-        {/* Footer */}
         <div className="flex justify-end gap-3 p-5 border-t border-[#2A3550]">
           <button
+            type="button"
             onClick={onClose}
             className="border border-gray-600 px-4 py-2 rounded-lg hover:bg-gray-700/40 text-gray-200"
           >
             Cancel
           </button>
           <button
+            type="button"
             onClick={handleSend}
             disabled={sending}
             className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-90 px-5 py-2 rounded-lg font-semibold text-white shadow-lg disabled:opacity-60"
@@ -350,7 +555,7 @@ function FollowUpComposer({ msg, onClose, onSent }) {
           </button>
         </div>
       </div>
-    
+    </div>
   );
 }
 
@@ -363,28 +568,34 @@ export default function OutreachStatus() {
   const { data: messages = [], isLoading, isError } = useOutreach();
 
   const [composerMsg, setComposerMsg] = useState(null);
+  const [replyViewerMsg, setReplyViewerMsg] = useState(null);
   const [replyingId, setReplyingId] = useState(null);
-
-  // Which stat card is selected. "ALL" = every sent email.
+  const [syncing, setSyncing] = useState(false);
   const [filter, setFilter] = useState("ALL");
 
-  // Live clock so the countdowns tick and the "Ready" state unlocks on time.
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30000);
     return () => clearInterval(id);
   }, []);
 
-  // Background Gmail reply sync (runs quietly — not shown in the UI).
+  // Background Gmail reply sync — updates Replied when mail arrives.
   useEffect(() => {
     let cancelled = false;
 
     const runSync = async () => {
       try {
-        await syncOutreachReplies();
-        if (!cancelled) {
-          await queryClient.invalidateQueries({ queryKey: ["outreach"] });
+        const result = await syncOutreachReplies();
+        if (cancelled) return;
+        const newly = Number(result?.replied || 0);
+        if (newly > 0) {
+          toast.success(
+            newly === 1
+              ? "New reply saved — check Replied"
+              : `${newly} new replies saved — check Replied`
+          );
         }
+        await queryClient.invalidateQueries({ queryKey: ["outreach"] });
       } catch (err) {
         console.warn("Reply sync failed:", err?.message || err);
       }
@@ -422,21 +633,14 @@ export default function OutreachStatus() {
       else if (key === "READY") ready += 1;
     }
 
-    return {
-      total: sentEmails.length,
-      replied,
-      awaiting,
-      ready,
-    };
+    return { total: sentEmails.length, replied, awaiting, ready };
   }, [sentEmails, now]);
 
-  // Rows shown in the table — only the selected section.
   const visibleEmails = useMemo(() => {
     if (filter === "ALL") return sentEmails;
     return sentEmails.filter((m) => getSectionKey(m, now) === filter);
   }, [sentEmails, filter, now]);
 
-  // Select a section; clicking the same card again returns to Emails Sent.
   const selectSection = (key) =>
     setFilter((prev) => (prev === key ? "ALL" : key));
 
@@ -450,17 +654,45 @@ export default function OutreachStatus() {
   const refresh = () =>
     queryClient.invalidateQueries({ queryKey: ["outreach"] });
 
+  const handleManualSync = async () => {
+    try {
+      setSyncing(true);
+      const result = await syncOutreachReplies({ limit: 60 });
+      await refresh();
+      const newly = Number(result?.replied || 0);
+      const saved = Number(result?.saved || 0);
+      if (newly > 0 || saved > 0) {
+        toast.success(
+          newly > 0
+            ? `${newly} conversation(s) moved to Replied`
+            : `${saved} reply update(s) saved`
+        );
+        if (newly > 0) setFilter("REPLIED");
+      } else {
+        toast.success("No new replies in Gmail yet");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error(
+        error?.response?.data?.message || "Failed to sync replies from Gmail"
+      );
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const handleReply = async (id) => {
     try {
       setReplyingId(id);
       const res = await markReplied(id);
       await refresh();
       const cancelled = res?.cancelled;
-      if (cancelled > 0) {
-        toast.success(
-          `Marked as replied. ${cancelled} remaining sequence email(s) cancelled.`
-        );
-      }
+      toast.success(
+        cancelled > 0
+          ? `Marked as replied. ${cancelled} remaining sequence email(s) cancelled.`
+          : "Marked as replied."
+      );
+      setFilter("REPLIED");
     } catch (error) {
       console.error(error);
       toast.error("Failed to mark as replied");
@@ -479,15 +711,12 @@ export default function OutreachStatus() {
 
   if (isError) {
     return (
-      <div className="text-red-500 text-xl">
-        Failed to load outreach status
-      </div>
+      <div className="text-red-500 text-xl">Failed to load outreach status</div>
     );
   }
 
   return (
     <div className="space-y-7">
-      {/* Stat cards — click to filter the table below */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
           label="Emails Sent"
@@ -531,7 +760,6 @@ export default function OutreachStatus() {
         />
       </div>
 
-      {/* Empty state */}
       {sentEmails.length === 0 && (
         <div className="rounded-2xl border border-dashed border-[#2A3550] bg-[#10182B] p-12 text-center">
           <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-500/30 flex items-center justify-center text-cyan-300 mb-4">
@@ -541,14 +769,12 @@ export default function OutreachStatus() {
             No emails sent yet
           </p>
           <p className="text-gray-500 text-sm mt-1 max-w-md mx-auto">
-            Run today&apos;s outreach from the Outreach Queue, or approve &amp;
-            send individual messages. Approved emails appear here for follow-up
-            tracking (10 new contacts per day + daily follow-ups).
+            Approve &amp; send from Outreach Queue. When contacts reply, they
+            appear under Replied with the saved Gmail message.
           </p>
         </div>
       )}
 
-      {/* Active filter indicator */}
       {sentEmails.length > 0 && (
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2 text-sm">
@@ -562,23 +788,35 @@ export default function OutreachStatus() {
             </span>
           </div>
 
-          {filter !== "ALL" && (
+          <div className="flex items-center gap-3">
             <button
-              onClick={() => setFilter("ALL")}
-              className="text-sm text-cyan-400 hover:text-cyan-300 font-medium"
+              type="button"
+              onClick={handleManualSync}
+              disabled={syncing}
+              className="text-sm text-emerald-400 hover:text-emerald-300 font-medium disabled:opacity-50"
             >
-              Clear filter ×
+              {syncing ? "Checking Gmail…" : "Check for replies"}
             </button>
-          )}
+            {filter !== "ALL" && (
+              <button
+                type="button"
+                onClick={() => setFilter("ALL")}
+                className="text-sm text-cyan-400 hover:text-cyan-300 font-medium"
+              >
+                Clear filter ×
+              </button>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Follow-up dashboard table */}
       {sentEmails.length > 0 && (
         <div className="rounded-2xl border border-[#22304F] bg-[#10182B] overflow-hidden shadow-xl">
           {visibleEmails.length === 0 ? (
             <div className="p-10 text-center text-gray-400">
-              No emails in “{FILTER_LABELS[filter] || filter}”.
+              {filter === "REPLIED"
+                ? "No replies yet. When a contact responds, their message is saved and shown here."
+                : `No emails in “${FILTER_LABELS[filter] || filter}”.`}
               {filter !== "ALL" && (
                 <button
                   type="button"
@@ -590,237 +828,253 @@ export default function OutreachStatus() {
               )}
             </div>
           ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="text-[11px] uppercase tracking-wider text-gray-400 bg-[#0C1424] border-b border-[#22304F]">
-                  <th className="px-4 py-4 font-semibold">Batch</th>
-                  <th className="px-4 py-4 font-semibold">Contact</th>
-                  <th className="px-4 py-4 font-semibold">Company</th>
-                  <th className="px-4 py-4 font-semibold">Email</th>
-                  <th className="px-4 py-4 font-semibold">Status</th>
-                  <th className="px-4 py-4 font-semibold">Sent At</th>
-                  <th className="px-4 py-4 font-semibold">Follow-up</th>
-                  <th className="px-4 py-4 font-semibold">Next Follow-up</th>
-                  <th className="px-4 py-4 font-semibold text-center">Count</th>
-                  <th className="px-4 py-4 font-semibold">Action</th>
-                </tr>
-              </thead>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="text-[11px] uppercase tracking-wider text-gray-400 bg-[#0C1424] border-b border-[#22304F]">
+                    <th className="px-4 py-4 font-semibold">Batch</th>
+                    <th className="px-4 py-4 font-semibold">Contact</th>
+                    <th className="px-4 py-4 font-semibold">Company</th>
+                    <th className="px-4 py-4 font-semibold">Email</th>
+                    <th className="px-4 py-4 font-semibold">Status</th>
+                    <th className="px-4 py-4 font-semibold">
+                      {filter === "REPLIED" ? "Reply" : "Sent At"}
+                    </th>
+                    <th className="px-4 py-4 font-semibold">Follow-up</th>
+                    <th className="px-4 py-4 font-semibold">Next Follow-up</th>
+                    <th className="px-4 py-4 font-semibold text-center">Count</th>
+                    <th className="px-4 py-4 font-semibold">Action</th>
+                  </tr>
+                </thead>
 
-              <tbody>
-                {visibleEmails.map((msg) => {
-                  const fu = deriveFollowUp(msg, now);
-                  const nextMs = msg.nextFollowUpTime
-                    ? new Date(msg.nextFollowUpTime).getTime() - now
-                    : 0;
+                <tbody>
+                  {visibleEmails.map((msg) => {
+                    const fu = deriveFollowUp(msg, now);
+                    const nextMs = msg.nextFollowUpTime
+                      ? new Date(msg.nextFollowUpTime).getTime() - now
+                      : 0;
+                    const snippet = replySnippet(msg);
 
-                  const overallStatus =
-                    msg.followUpStatus ||
-                    (msg.followUpCount > 0 ? "Follow-up Sent" : "Sent");
+                    const overallStatus = msg.replyReceived
+                      ? "Replied"
+                      : msg.followUpStatus ||
+                        (msg.followUpCount > 0 ? "Follow-up Sent" : "Sent");
 
-                  const rowHighlight =
-                    fu.key === "READY"
-                      ? "bg-orange-500/[0.04]"
-                      : fu.key === "REPLIED"
-                      ? "bg-emerald-500/[0.03]"
-                      : fu.key === "SCHEDULED"
-                      ? "bg-violet-500/[0.03]"
-                      : fu.key === "QUEUED"
-                      ? "bg-cyan-500/[0.03]"
-                      : "";
+                    const rowHighlight =
+                      fu.key === "READY"
+                        ? "bg-orange-500/[0.04]"
+                        : fu.key === "REPLIED"
+                          ? "bg-emerald-500/[0.03]"
+                          : fu.key === "SCHEDULED"
+                            ? "bg-violet-500/[0.03]"
+                            : fu.key === "QUEUED"
+                              ? "bg-cyan-500/[0.03]"
+                              : "";
 
-                  return (
-                    <tr
-                      key={msg._id}
-                      className={`border-b border-[#192540] last:border-0 hover:bg-[#16203A] transition align-middle ${rowHighlight}`}
-                    >
-                      {/* Batch */}
-                      <td className="px-4 py-4 text-gray-400 text-sm whitespace-nowrap">
-                        {msg.outreachBatch ? `#${msg.outreachBatch}` : "—"}
-                      </td>
+                    return (
+                      <tr
+                        key={msg._id}
+                        className={`border-b border-[#192540] last:border-0 hover:bg-[#16203A] transition align-middle ${rowHighlight}`}
+                      >
+                        <td className="px-4 py-4 text-gray-400 text-sm whitespace-nowrap">
+                          {msg.outreachBatch ? `#${msg.outreachBatch}` : "—"}
+                        </td>
 
-                      {/* Contact */}
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div
-                            className={`w-9 h-9 shrink-0 rounded-xl bg-gradient-to-br ${gradientFor(
-                              msg.name || msg.email
-                            )} flex items-center justify-center font-bold text-white text-sm shadow`}
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div
+                              className={`w-9 h-9 shrink-0 rounded-xl bg-gradient-to-br ${gradientFor(
+                                msg.name || msg.email
+                              )} flex items-center justify-center font-bold text-white text-sm shadow`}
+                            >
+                              {msg.initials || "?"}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-white truncate">
+                                {msg.name || "Unknown"}
+                              </p>
+                              <p className="text-xs text-gray-400 truncate">
+                                {msg.role || "—"}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-4 text-gray-300">
+                          {msg.company || "—"}
+                        </td>
+
+                        <td className="px-4 py-4 text-gray-400 text-sm max-w-[190px] truncate">
+                          {msg.email || msg.deliveredTo || "—"}
+                        </td>
+
+                        <td className="px-4 py-4">
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                              msg.replyReceived
+                                ? "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30"
+                                : msg.followUpCount > 0
+                                  ? "bg-purple-500/15 text-purple-300 ring-1 ring-purple-500/30"
+                                  : "bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/30"
+                            }`}
                           >
-                            {msg.initials || "?"}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="font-semibold text-white truncate">
-                              {msg.name || "Unknown"}
-                            </p>
-                            <p className="text-xs text-gray-400 truncate">
-                              {msg.role || "—"}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Company */}
-                      <td className="px-4 py-4 text-gray-300">
-                        {msg.company || "—"}
-                      </td>
-
-                      {/* Email */}
-                      <td className="px-4 py-4 text-gray-400 text-sm max-w-[190px] truncate">
-                        {msg.email || msg.deliveredTo || "—"}
-                      </td>
-
-                      {/* Status */}
-                      <td className="px-4 py-4">
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
-                            msg.replyReceived
-                              ? "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30"
-                              : msg.followUpCount > 0
-                              ? "bg-purple-500/15 text-purple-300 ring-1 ring-purple-500/30"
-                              : "bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/30"
-                          }`}
-                        >
-                          {overallStatus}
-                        </span>
-                      </td>
-
-                      {/* Sent At */}
-                      <td className="px-4 py-4 text-gray-400 text-sm whitespace-nowrap">
-                        {msg.status === "SCHEDULED" && msg.scheduledSendLabel
-                          ? msg.scheduledSendLabel
-                          : msg.sentAt
-                          ? new Date(msg.sentAt).toLocaleString()
-                          : msg.approvedAt
-                          ? new Date(msg.approvedAt).toLocaleString()
-                          : "—"}
-                      </td>
-
-                      {/* Follow-up status */}
-                      <td className="px-4 py-4">
-                        {fu.key === "SCHEDULED" ? (
-                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-violet-400">
-                            <span className="w-2 h-2 rounded-full bg-violet-400" />
-                            Awaiting delivery
+                            {overallStatus}
                           </span>
-                        ) : fu.key === "QUEUED" ? (
-                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-cyan-400">
-                            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-                            {fu.label}
-                          </span>
-                        ) : fu.key === "REPLIED" ? (
-                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
-                            <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                            Replied
-                          </span>
-                        ) : fu.key === "READY" ? (
-                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-orange-400">
-                            <span className="relative flex h-2 w-2">
-                              <span className="absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75 animate-ping" />
-                              <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-400" />
+                        </td>
+
+                        <td className="px-4 py-4 text-sm max-w-[240px]">
+                          {msg.replyReceived ? (
+                            <div className="space-y-1">
+                              <p className="text-emerald-300/90 text-xs font-medium truncate">
+                                {msg.replySubject || "Inbound reply"}
+                              </p>
+                              <p className="text-gray-400 text-xs line-clamp-2 whitespace-pre-line">
+                                {snippet ||
+                                  (msg.replyReceivedAt
+                                    ? `Received ${new Date(
+                                        msg.replyReceivedAt
+                                      ).toLocaleString()}`
+                                    : "Reply recorded — open to view")}
+                              </p>
+                            </div>
+                          ) : msg.status === "SCHEDULED" &&
+                            msg.scheduledSendLabel ? (
+                            <span className="text-gray-400">
+                              {msg.scheduledSendLabel}
                             </span>
-                            Ready
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-yellow-400">
-                            <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
-                            Waiting
-                          </span>
-                        )}
-                      </td>
+                          ) : (
+                            <span className="text-gray-400 whitespace-nowrap">
+                              {msg.sentAt
+                                ? new Date(msg.sentAt).toLocaleString()
+                                : msg.approvedAt
+                                  ? new Date(msg.approvedAt).toLocaleString()
+                                  : "—"}
+                            </span>
+                          )}
+                        </td>
 
-                      {/* Next follow-up countdown */}
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        {msg.replyReceived || fu.key === "SCHEDULED" || fu.key === "QUEUED" ? (
-                          <span className="text-gray-500 text-sm">—</span>
-                        ) : fu.ready ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-orange-500/15 text-orange-300">
-                            <Icon
-                              path={icons.bolt}
-                              className="w-3.5 h-3.5"
-                            />
-                            Ready now
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#192540] text-gray-300">
-                            <Icon
-                              path={icons.clock}
-                              className="w-3.5 h-3.5"
-                            />
-                            {formatCountdown(nextMs)}
-                          </span>
-                        )}
-                      </td>
+                        <td className="px-4 py-4">
+                          {fu.key === "SCHEDULED" ? (
+                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-violet-400">
+                              <span className="w-2 h-2 rounded-full bg-violet-400" />
+                              Awaiting delivery
+                            </span>
+                          ) : fu.key === "QUEUED" ? (
+                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-cyan-400">
+                              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                              {fu.label}
+                            </span>
+                          ) : fu.key === "REPLIED" ? (
+                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
+                              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                              Sequence stopped
+                            </span>
+                          ) : fu.key === "READY" ? (
+                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-orange-400">
+                              <span className="relative flex h-2 w-2">
+                                <span className="absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75 animate-ping" />
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-400" />
+                              </span>
+                              Ready
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-yellow-400">
+                              <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+                              Waiting
+                            </span>
+                          )}
+                        </td>
 
-                      {/* Count */}
-                      <td className="px-4 py-4 text-center">
-                        <span className="inline-flex items-center justify-center min-w-[1.75rem] h-7 px-2 rounded-full bg-[#192540] text-gray-200 font-semibold text-sm">
-                          {msg.followUpCount || 0}
-                        </span>
-                      </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          {msg.replyReceived ||
+                          fu.key === "SCHEDULED" ||
+                          fu.key === "QUEUED" ? (
+                            <span className="text-gray-500 text-sm">—</span>
+                          ) : fu.ready ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-orange-500/15 text-orange-300">
+                              <Icon path={icons.bolt} className="w-3.5 h-3.5" />
+                              Ready now
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#192540] text-gray-300">
+                              <Icon path={icons.clock} className="w-3.5 h-3.5" />
+                              {formatCountdown(nextMs)}
+                            </span>
+                          )}
+                        </td>
 
-                      {/* Action */}
-                      <td className="px-4 py-4">
-                        {fu.key === "SCHEDULED" ? (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-violet-500/15 text-violet-300 ring-1 ring-violet-500/30">
-                            Queued
+                        <td className="px-4 py-4 text-center">
+                          <span className="inline-flex items-center justify-center min-w-[1.75rem] h-7 px-2 rounded-full bg-[#192540] text-gray-200 font-semibold text-sm">
+                            {msg.followUpCount || 0}
                           </span>
-                        ) : fu.key === "QUEUED" ? (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/30">
-                            Worker processing
-                          </span>
-                        ) : msg.replyReceived ? (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30">
-                            <Icon path={icons.check} className="w-4 h-4" />
-                            Replied
-                          </span>
-                        ) : (
-                          <div className="flex flex-col gap-1.5">
+                        </td>
+
+                        <td className="px-4 py-4">
+                          {fu.key === "SCHEDULED" ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-violet-500/15 text-violet-300 ring-1 ring-violet-500/30">
+                              Queued
+                            </span>
+                          ) : fu.key === "QUEUED" ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/30">
+                              Worker processing
+                            </span>
+                          ) : msg.replyReceived ? (
                             <button
-                              onClick={() => setComposerMsg(msg)}
-                              disabled={!fu.ready}
-                              className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                                fu.ready
-                                  ? "bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-90 text-white shadow-md shadow-cyan-500/20"
-                                  : "bg-[#192540] text-gray-500 cursor-not-allowed"
-                              }`}
+                              type="button"
+                              onClick={() => setReplyViewerMsg(msg)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30 hover:bg-emerald-500/25 transition"
                             >
-                              {fu.ready ? (
-                                <>
-                                  <Icon
-                                    path={icons.mail}
-                                    className="w-3.5 h-3.5"
-                                  />
-                                  Send Follow-up
-                                </>
-                              ) : (
-                                "Waiting for Response"
-                              )}
+                              <Icon path={icons.inbox} className="w-3.5 h-3.5" />
+                              View reply
                             </button>
+                          ) : (
+                            <div className="flex flex-col gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setComposerMsg(msg)}
+                                disabled={!fu.ready}
+                                className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                                  fu.ready
+                                    ? "bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-90 text-white shadow-md shadow-cyan-500/20"
+                                    : "bg-[#192540] text-gray-500 cursor-not-allowed"
+                                }`}
+                              >
+                                {fu.ready ? (
+                                  <>
+                                    <Icon
+                                      path={icons.mail}
+                                      className="w-3.5 h-3.5"
+                                    />
+                                    Send Follow-up
+                                  </>
+                                ) : (
+                                  "Waiting for Response"
+                                )}
+                              </button>
 
-                            <button
-                              onClick={() => handleReply(msg._id)}
-                              disabled={replyingId === msg._id}
-                              className="text-[11px] text-gray-500 hover:text-emerald-400 transition disabled:opacity-60"
-                            >
-                              {replyingId === msg._id
-                                ? "Saving..."
-                                : "Mark as replied"}
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                              <button
+                                type="button"
+                                onClick={() => handleReply(msg._id)}
+                                disabled={replyingId === msg._id}
+                                className="text-[11px] text-gray-500 hover:text-emerald-400 transition disabled:opacity-60"
+                              >
+                                {replyingId === msg._id
+                                  ? "Saving..."
+                                  : "Mark as replied"}
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
 
-      {/* Follow-up composer modal */}
       <FollowUpComposer
         msg={composerMsg}
         onClose={() => setComposerMsg(null)}
@@ -829,6 +1083,11 @@ export default function OutreachStatus() {
           await refresh();
           queryClient.invalidateQueries({ queryKey: ["campaigns"] });
         }}
+      />
+
+      <ReplyViewer
+        msg={replyViewerMsg}
+        onClose={() => setReplyViewerMsg(null)}
       />
     </div>
   );

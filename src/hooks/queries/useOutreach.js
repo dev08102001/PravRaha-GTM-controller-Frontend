@@ -20,9 +20,10 @@ export default function useOutreach() {
         (m) =>
           (m.status || "").toUpperCase() === "SENT" && !m.replyReceived
       );
+      // Keep Replied section fresh while waiting on inbox replies.
       if (hasActive) return 5000;
       if (awaitingReply) return 30000;
-      return false;
+      return 60_000;
     },
   });
 }
