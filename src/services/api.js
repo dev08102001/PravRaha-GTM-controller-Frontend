@@ -19,7 +19,7 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
  
-// Auto logout on invalid/expired session
+// Auto logout on invalid/expired session; surface rate limits
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -32,6 +32,13 @@ api.interceptors.response.use(
       );
  
       window.location.href = "/login";
+    }
+
+    if (error.response?.status === 429) {
+      toast.error(
+        error.response?.data?.message ||
+          "Too many requests. Please try again later."
+      );
     }
  
     return Promise.reject(error);
