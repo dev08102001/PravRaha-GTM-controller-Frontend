@@ -58,7 +58,10 @@ export const getOutreachReplies = async (id) => {
 };
 
 export const syncOutreachReplies = async (payload = {}) => {
-  const { data } = await api.post("/outreach/sync-replies", payload);
+  const { silent, ...body } = payload;
+  const { data } = await api.post("/outreach/sync-replies", body, {
+    skipErrorToast: Boolean(silent),
+  });
   return data;
 };
 

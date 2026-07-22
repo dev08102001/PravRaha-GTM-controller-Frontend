@@ -31,6 +31,7 @@ const formatRemaining = (ms) => {
 
 const formatIntervalLabel = (hours) => {
   const h = Number(hours) || 24;
+  if (h === 0.5) return "30 Min";
   return h % 24 === 0 && h >= 48 ? `${h}h · ${h / 24} Days` : `${h} Hours`;
 };
 
@@ -333,7 +334,9 @@ export default function OutreachDetailsDrawer({ outreachId, onClose }) {
                 />
                 <StatChip
                   label="Interval"
-                  value={`${details.followUps.followUpIntervalHours}h`}
+                  value={formatIntervalLabel(
+                    details.followUps.followUpIntervalHours
+                  )}
                   accent="text-cyan-300"
                 />
                 {details.recipient.score != null && (

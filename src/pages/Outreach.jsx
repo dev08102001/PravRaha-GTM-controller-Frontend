@@ -27,6 +27,7 @@ const SEQUENCE_LABELS = [
 const MAX_FOLLOW_UPS = 6;
 const QUEUE_PAGE_SIZE_OPTIONS = [5, 10, 25, 50, 100];
 const FOLLOW_UP_INTERVAL_OPTIONS = [
+  { hours: 0.5, label: "30 Min" },
   { hours: 24, label: "24 Hours" },
   { hours: 48, label: "48 Hours" },
   { hours: 72, label: "72 Hours" },

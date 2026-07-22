@@ -16,6 +16,10 @@ export default function CampaignDetails() {
       return campaignMapper(raw);
     },
     enabled: Boolean(id),
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    staleTime: 0,
+    refetchInterval: 30_000,
   });
 
   if (isLoading) {

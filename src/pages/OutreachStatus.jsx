@@ -22,8 +22,15 @@ import OutreachDetailsDrawer from "../components/outreach/OutreachDetailsDrawer"
 | REPLIED / AWAITING / READY partition SENT outreach; other statuses stay under
 | Emails Sent only.
 */
+const isReplied = (msg) =>
+  Boolean(
+    msg?.replyReceived ||
+      msg?.sequenceCancelled ||
+      String(msg?.followUpStatus || "").toLowerCase() === "replied"
+  );
+
 const getSectionKey = (msg, now = Date.now()) => {
-  if (msg.replyReceived) return "REPLIED";
+  if (isReplied(msg)) return "REPLIED";
 
   const status = (msg.status || "").toUpperCase();
   if (status === "SCHEDULED") return "SCHEDULED";
@@ -916,24 +923,30 @@ export default function OutreachStatus() {
 
     const runSync = async () => {
       try {
-        const result = await syncOutreachReplies();
+        const result = await syncOutreachReplies({ silent: true });
         if (cancelled) return;
         const newly = Number(result?.replied || 0);
+        const saved = Number(result?.saved || 0);
+        if (newly > 0 || saved > 0) {
+          await queryClient.invalidateQueries({ queryKey: ["outreach"] });
+          await queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+        }
         if (newly > 0) {
           toast.success(
             newly === 1
               ? "New reply saved — check Replied"
               : `${newly} new replies saved — check Replied`
           );
+          setFilter("REPLIED");
         }
-        await queryClient.invalidateQueries({ queryKey: ["outreach"] });
       } catch (err) {
+        // Silent — rate limits / offline should not spam the UI.
         console.warn("Reply sync failed:", err?.message || err);
       }
     };
 
     runSync();
-    const id = setInterval(runSync, 60_000);
+    const id = setInterval(runSync, 90_000);
     return () => {
       cancelled = true;
       clearInterval(id);
@@ -993,6 +1006,7 @@ export default function OutreachStatus() {
       setSyncing(true);
       const result = await syncOutreachReplies({ limit: 60 });
       await refresh();
+      await queryClient.invalidateQueries({ queryKey: ["campaigns"] });
       const newly = Number(result?.replied || 0);
       const saved = Number(result?.saved || 0);
       if (newly > 0 || saved > 0) {
@@ -1019,7 +1033,25 @@ export default function OutreachStatus() {
     try {
       setReplyingId(id);
       const res = await markReplied(id);
-      await refresh();
+      const updated = res?.data;
+      if (updated?._id) {
+        queryClient.setQueryData(["outreach"], (old = []) =>
+          old.map((m) =>
+            m._id === updated._id
+              ? {
+                  ...m,
+                  ...updated,
+                  replyReceived: true,
+                  followUpStatus: "Replied",
+                  sequenceCancelled: true,
+                }
+              : m
+          )
+        );
+      } else {
+        await refresh();
+      }
+      await queryClient.invalidateQueries({ queryKey: ["campaigns"] });
       const cancelled = res?.cancelled;
       toast.success(
         cancelled > 0
@@ -1191,7 +1223,7 @@ export default function OutreachStatus() {
                       : 0;
                     const snippet = replySnippet(msg);
 
-                    const overallStatus = msg.replyReceived
+                    const overallStatus = isReplied(msg)
                       ? "Replied"
                       : msg.followUpStatus ||
                         (msg.followUpCount > 0 ? "Follow-up Sent" : "Sent");
@@ -1247,7 +1279,7 @@ export default function OutreachStatus() {
                         <td className="px-4 py-4">
                           <span
                             className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
-                              msg.replyReceived
+                              isReplied(msg)
                                 ? "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30"
                                 : msg.followUpCount > 0
                                   ? "bg-purple-500/15 text-purple-300 ring-1 ring-purple-500/30"
@@ -1259,7 +1291,7 @@ export default function OutreachStatus() {
                         </td>
 
                         <td className="px-4 py-4 text-sm max-w-[240px]">
-                          {msg.replyReceived ? (
+                          {isReplied(msg) ? (
                             <div className="space-y-1">
                               <p className="text-emerald-300/90 text-xs font-medium truncate">
                                 {msg.replySubject || "Inbound reply"}
@@ -1322,7 +1354,7 @@ export default function OutreachStatus() {
                         </td>
 
                         <td className="px-4 py-4 whitespace-nowrap">
-                          {msg.replyReceived ||
+                          {isReplied(msg) ||
                           fu.key === "SCHEDULED" ||
                           fu.key === "QUEUED" ? (
                             <span className="text-gray-500 text-sm">—</span>
@@ -1354,7 +1386,7 @@ export default function OutreachStatus() {
                             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/30">
                               Worker processing
                             </span>
-                          ) : msg.replyReceived ? (
+                          ) : isReplied(msg) ? (
                             <button
                               type="button"
                               onClick={() => setReplyViewerMsg(msg)}

@@ -18,7 +18,10 @@ export default function useOutreach() {
       );
       const awaitingReply = list.some(
         (m) =>
-          (m.status || "").toUpperCase() === "SENT" && !m.replyReceived
+          (m.status || "").toUpperCase() === "SENT" &&
+          !m.replyReceived &&
+          !m.sequenceCancelled &&
+          String(m.followUpStatus || "").toLowerCase() !== "replied"
       );
       // Keep Replied section fresh while waiting on inbox replies.
       if (hasActive) return 5000;

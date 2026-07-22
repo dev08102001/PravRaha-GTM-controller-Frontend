@@ -16,5 +16,14 @@ export default function useCampaigns() {
 
       return campaigns.map(campaignMapper);
     },
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    staleTime: 0,
+    // Keep Replies metric fresh while campaigns are running.
+    refetchInterval: (query) => {
+      const list = query.state.data || [];
+      const hasRunning = list.some((c) => c.status === "running");
+      return hasRunning ? 30_000 : 60_000;
+    },
   });
 }

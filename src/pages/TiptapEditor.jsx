@@ -6,6 +6,26 @@ import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
 import Image from "@tiptap/extension-image";
 import { uploadImage } from "../services/uploadService";
+
+const escapeHtml = (text = "") =>
+  String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+// Tiptap parses its content as HTML, so plain-text bodies (with \n line
+// breaks) collapse into a single paragraph. Convert them to <p>/<br> first
+// so the mail keeps its original formatting inside the editor.
+const toEditorHtml = (value = "") => {
+  const raw = String(value || "");
+  if (!raw.trim()) return "";
+  if (/<\/?[a-z][\s\S]*>/i.test(raw)) return raw; // already HTML
+  return raw
+    .split(/\n{2,}/)
+    .map((block) => `<p>${escapeHtml(block).replace(/\n/g, "<br>")}</p>`)
+    .join("");
+};
+
 export default function TiptapEditor({ value, onChange }) {
   const editor = useEditor({
     extensions: [
@@ -20,7 +40,7 @@ export default function TiptapEditor({ value, onChange }) {
       }),
     ],
 
-    content: value || "",
+    content: toEditorHtml(value),
 
     onUpdate({ editor }) {
       onChange(editor.getHTML());
@@ -30,8 +50,9 @@ export default function TiptapEditor({ value, onChange }) {
   useEffect(() => {
     if (!editor) return;
 
-    if (editor.getHTML() !== value) {
-      editor.commands.setContent(value || "", false);
+    const html = toEditorHtml(value);
+    if (editor.getHTML() !== html) {
+      editor.commands.setContent(html, false);
     }
   }, [value, editor]);
 

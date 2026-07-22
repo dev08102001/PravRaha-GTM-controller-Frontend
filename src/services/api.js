@@ -34,7 +34,7 @@ api.interceptors.response.use(
       window.location.href = "/login";
     }
 
-    if (error.response?.status === 429) {
+    if (error.response?.status === 429 && !error.config?.skipErrorToast) {
       toast.error(
         error.response?.data?.message ||
           "Too many requests. Please try again later."
