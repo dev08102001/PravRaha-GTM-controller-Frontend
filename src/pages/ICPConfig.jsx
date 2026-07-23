@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 
@@ -18,6 +18,7 @@ import { isICPConfigured } from "../utils/icpUtils";
 export default function ICPConfig() {
   const navigate = useNavigate();
   const [icp, setIcp] = useState({});
+  const hydratedKeyRef = useRef(null);
 
   const {
     data: sections = [],
@@ -45,10 +46,21 @@ export default function ICPConfig() {
   } = useDeleteICP();
 
   useEffect(() => {
-    // Only set initial state to prevent overwriting user edits on background refetches
-    if (icpData && Object.keys(icp).length === 0) {
-      setIcp(icpData);
+    // Reload saved selections when entering the page / after save.
+    // Skip identical refetches so mid-edit clicks are not wiped.
+    if (icpData === null) {
+      hydratedKeyRef.current = null;
+      setIcp({});
+      return;
     }
+    if (!icpData) return;
+
+    const key = `${icpData._id || "draft"}:${icpData.updatedAt || ""}:${(
+      icpData.fundingStage || []
+    ).join(",")}`;
+    if (hydratedKeyRef.current === key) return;
+    hydratedKeyRef.current = key;
+    setIcp(icpData);
   }, [icpData]);
 
   const toggleSelection = (field, value) => {
@@ -112,7 +124,10 @@ export default function ICPConfig() {
     if (!confirmed) return;
 
     deleteICP(undefined, {
-      onSuccess: () => setIcp({}),
+      onSuccess: () => {
+        hydratedKeyRef.current = null;
+        setIcp({});
+      },
     });
   };
 

@@ -53,6 +53,7 @@ export default function LiveSignalFeed() {
         ...(icp.employeeRange || []),
         ...(icp.geographies || []),
         ...(icp.techStack || []),
+        ...(icp.fundingStage || []),
         ...(icp.revenueStage || []),
       ].join("|")
     : "no-icp";
