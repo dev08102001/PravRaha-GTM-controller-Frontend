@@ -9,6 +9,7 @@ import {
   syncOutreachReplies,
   getOutreachReplies,
   deleteOutreachMessage,
+  runOutreachAgain,
 } from "../services/outreachService";
 import TiptapEditor from "./TiptapEditor";
 import OutreachDetailsDrawer from "../components/outreach/OutreachDetailsDrawer";
@@ -19,8 +20,8 @@ import OutreachDetailsDrawer from "../components/outreach/OutreachDetailsDrawer"
 
 /*
 | Single source of truth for the 4 Outreach Status cards and the table filter.
-| REPLIED / AWAITING / READY partition SENT outreach; other statuses stay under
-| Emails Sent only.
+| REPLIED / AWAITING / READY / COMPLETED partition SENT outreach; other
+| statuses stay under Emails Sent only.
 */
 const isReplied = (msg) =>
   Boolean(
@@ -29,8 +30,50 @@ const isReplied = (msg) =>
       String(msg?.followUpStatus || "").toLowerCase() === "replied"
   );
 
+const isSequenceComplete = (msg) => {
+  if (!msg || isReplied(msg)) return false;
+  if (
+    msg.sequenceComplete === true ||
+    String(msg.followUpStatus || "").toLowerCase() === "completed"
+  ) {
+    return true;
+  }
+
+  const sequence = Array.isArray(msg.emailSequence) ? msg.emailSequence : [];
+  if (sequence.length) {
+    const initialSent = sequence.some(
+      (step) =>
+        Number(step.step) === 0 &&
+        String(step.status || "").toUpperCase() === "SENT"
+    );
+    if (!initialSent) return false;
+    const hasOpen = sequence.some((step) =>
+      ["PENDING", "SCHEDULED", "FAILED"].includes(
+        String(step.status || "").toUpperCase()
+      )
+    );
+    return !hasOpen;
+  }
+
+  const max = Number(msg.maxFollowUps);
+  if (!Number.isFinite(max) || max < 0) return false;
+  return Number(msg.followUpCount || 0) >= max && Boolean(msg.sentAt);
+};
+
+const getNextSequenceFollowUp = (msg) => {
+  const sequence = Array.isArray(msg.emailSequence) ? msg.emailSequence : [];
+  return sequence.find(
+    (s) =>
+      s.step > 0 &&
+      ["PENDING", "SCHEDULED", "FAILED"].includes(
+        String(s.status || "").toUpperCase()
+      )
+  );
+};
+
 const getSectionKey = (msg, now = Date.now()) => {
   if (isReplied(msg)) return "REPLIED";
+  if (isSequenceComplete(msg)) return "COMPLETED";
 
   const status = (msg.status || "").toUpperCase();
   if (status === "SCHEDULED") return "SCHEDULED";
@@ -42,12 +85,16 @@ const getSectionKey = (msg, now = Date.now()) => {
     : 0;
 
   if (next && now < next) return "AWAITING";
+  // No next deadline and nothing left to send → complete, not "ready".
+  if (!next && !getNextSequenceFollowUp(msg)) return "COMPLETED";
   return "READY";
 };
 
 const deriveFollowUp = (msg, now) => {
   const key = getSectionKey(msg, now);
   if (key === "REPLIED") return { key: "REPLIED", label: "Replied", ready: false };
+  if (key === "COMPLETED")
+    return { key: "COMPLETED", label: "Campaign Complete", ready: false };
   if (key === "SCHEDULED") return { key: "SCHEDULED", label: "Scheduled", ready: false };
   if (key === "QUEUED") {
     const status = (msg.status || "").toUpperCase();
@@ -79,6 +126,7 @@ const isTrackedOutreach = (m) => {
       "Follow-up Sending",
       "Follow-up Sent",
       "Follow-up Scheduled",
+      "Completed",
       "Replied",
     ].includes(m.followUpStatus);
   return (
@@ -124,17 +172,6 @@ const formatCountdown = (ms) => {
 };
 
 const firstNameOf = (name = "") => name.trim().split(/\s+/)[0] || "there";
-
-const getNextSequenceFollowUp = (msg) => {
-  const sequence = Array.isArray(msg.emailSequence) ? msg.emailSequence : [];
-  return sequence.find(
-    (s) =>
-      s.step > 0 &&
-      ["PENDING", "SCHEDULED", "FAILED"].includes(
-        String(s.status || "").toUpperCase()
-      )
-  );
-};
 
 const buildFollowUpDraft = (msg) => {
   const next = getNextSequenceFollowUp(msg);
@@ -763,6 +800,60 @@ function DeleteConfirmModal({ message, deleting, onCancel, onConfirm }) {
   );
 }
 
+function RunAgainConfirmModal({ message, running, onCancel, onConfirm }) {
+  if (!message) return null;
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="w-full max-w-md rounded-2xl border border-cyan-500/25 bg-[#0B1120] shadow-[0_0_60px_-15px_rgba(34,211,238,0.35)] overflow-hidden">
+        <div className="relative p-5 border-b border-[#2A3550] bg-gradient-to-r from-cyan-600/20 via-blue-600/10 to-transparent">
+          <div className="relative flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-xl text-white shadow-lg shadow-cyan-500/30">
+              🔄
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-lg font-bold text-white">Run this campaign again?</h2>
+              <p className="text-sm text-gray-400 truncate">
+                {message.name || "Unknown contact"}
+                {message.company ? ` · ${message.company}` : ""}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-3">
+          <p className="text-sm text-gray-300 leading-relaxed">
+            Are you sure you want to run this campaign again?
+          </p>
+          <p className="text-xs text-gray-500 leading-relaxed">
+            A new execution will be created with a fresh email sequence. The
+            completed run and its history stay untouched.
+          </p>
+        </div>
+
+        <div className="flex justify-end gap-3 p-4 border-t border-[#2A3550] bg-[#0C1424]/80">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={running}
+            className="border border-gray-600 px-4 py-2 rounded-lg text-sm text-gray-200 hover:bg-gray-700/40 disabled:opacity-50 transition"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={running}
+            className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-90 active:scale-[0.98] px-4 py-2 rounded-lg text-sm font-semibold text-white shadow-lg shadow-cyan-500/25 disabled:opacity-60 transition"
+          >
+            {running ? "Starting…" : "Run Again"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Page                                                               */
 /* ------------------------------------------------------------------ */
@@ -775,11 +866,27 @@ export default function OutreachStatus() {
   const [replyViewerMsg, setReplyViewerMsg] = useState(null);
   const [detailsId, setDetailsId] = useState(null);
   const [deleteCandidate, setDeleteCandidate] = useState(null);
+  const [runAgainCandidate, setRunAgainCandidate] = useState(null);
   const [pendingDeleteIds, setPendingDeleteIds] = useState(() => new Set());
   const pendingDeletesRef = useRef(new Map());
   const [replyingId, setReplyingId] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [filter, setFilter] = useState("ALL");
+
+  const runAgainMutation = useMutation({
+    mutationFn: (id) => runOutreachAgain(id),
+    onSuccess: async () => {
+      toast.success("Campaign restarted successfully.");
+      setRunAgainCandidate(null);
+      await queryClient.invalidateQueries({ queryKey: ["outreach"] });
+      await queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+    },
+    onError: (error) => {
+      toast.error(
+        error?.response?.data?.message || "Failed to restart campaign"
+      );
+    },
+  });
 
   const deleteMutation = useMutation({
     mutationFn: async ({ id }) => {
@@ -1225,15 +1332,19 @@ export default function OutreachStatus() {
 
                     const overallStatus = isReplied(msg)
                       ? "Replied"
-                      : msg.followUpStatus ||
-                        (msg.followUpCount > 0 ? "Follow-up Sent" : "Sent");
+                      : isSequenceComplete(msg)
+                        ? "Campaign Complete"
+                        : msg.followUpStatus ||
+                          (msg.followUpCount > 0 ? "Follow-up Sent" : "Sent");
 
                     const rowHighlight =
                       fu.key === "READY"
                         ? "bg-orange-500/[0.04]"
                         : fu.key === "REPLIED"
                           ? "bg-emerald-500/[0.03]"
-                          : fu.key === "SCHEDULED"
+                          : fu.key === "COMPLETED"
+                            ? "bg-teal-500/[0.03]"
+                            : fu.key === "SCHEDULED"
                             ? "bg-violet-500/[0.03]"
                             : fu.key === "QUEUED"
                               ? "bg-cyan-500/[0.03]"
@@ -1281,12 +1392,14 @@ export default function OutreachStatus() {
                             className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
                               isReplied(msg)
                                 ? "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30"
-                                : msg.followUpCount > 0
-                                  ? "bg-purple-500/15 text-purple-300 ring-1 ring-purple-500/30"
-                                  : "bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/30"
+                                : isSequenceComplete(msg)
+                                  ? "bg-teal-500/15 text-teal-300 ring-1 ring-teal-500/30"
+                                  : msg.followUpCount > 0
+                                    ? "bg-purple-500/15 text-purple-300 ring-1 ring-purple-500/30"
+                                    : "bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/30"
                             }`}
                           >
-                            {overallStatus}
+                            {isSequenceComplete(msg) ? "✅ Campaign Complete" : overallStatus}
                           </span>
                         </td>
 
@@ -1337,6 +1450,11 @@ export default function OutreachStatus() {
                               <span className="w-2 h-2 rounded-full bg-emerald-400" />
                               Sequence stopped
                             </span>
+                          ) : fu.key === "COMPLETED" ? (
+                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-400">
+                              <span className="w-2 h-2 rounded-full bg-teal-400" />
+                              All follow-ups sent
+                            </span>
                           ) : fu.key === "READY" ? (
                             <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-orange-400">
                               <span className="relative flex h-2 w-2">
@@ -1355,6 +1473,7 @@ export default function OutreachStatus() {
 
                         <td className="px-4 py-4 whitespace-nowrap">
                           {isReplied(msg) ||
+                          fu.key === "COMPLETED" ||
                           fu.key === "SCHEDULED" ||
                           fu.key === "QUEUED" ? (
                             <span className="text-gray-500 text-sm">—</span>
@@ -1395,6 +1514,26 @@ export default function OutreachStatus() {
                               <Icon path={icons.inbox} className="w-3.5 h-3.5" />
                               View reply
                             </button>
+                          ) : isSequenceComplete(msg) ? (
+                            <div className="flex flex-col gap-1.5">
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-teal-500/15 text-teal-300 ring-1 ring-teal-500/30">
+                                ✅ Campaign Complete
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setRunAgainCandidate(msg)}
+                                disabled={
+                                  runAgainMutation.isPending &&
+                                  runAgainCandidate?._id === msg._id
+                                }
+                                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-90 text-white shadow-md shadow-cyan-500/20 disabled:opacity-60 transition"
+                              >
+                                {runAgainMutation.isPending &&
+                                runAgainCandidate?._id === msg._id
+                                  ? "Starting…"
+                                  : "🔄 Run Again"}
+                              </button>
+                            </div>
                           ) : (
                             <div className="flex flex-col gap-1.5">
                               <button
@@ -1494,6 +1633,19 @@ export default function OutreachStatus() {
         }}
         onConfirm={() => {
           if (deleteCandidate?._id) stageDelete(deleteCandidate);
+        }}
+      />
+
+      <RunAgainConfirmModal
+        message={runAgainCandidate}
+        running={runAgainMutation.isPending}
+        onCancel={() => {
+          if (!runAgainMutation.isPending) setRunAgainCandidate(null);
+        }}
+        onConfirm={() => {
+          if (runAgainCandidate?._id) {
+            runAgainMutation.mutate(runAgainCandidate._id);
+          }
         }}
       />
     </div>

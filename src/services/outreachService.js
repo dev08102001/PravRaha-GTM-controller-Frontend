@@ -74,3 +74,9 @@ export const sendTestEmail = async (payload) => {
   const { data } = await api.post(`/outreach/test`, payload);
   return data;
 };
+
+/** Clone a completed outreach into a fresh execution and send the initial email. */
+export const runOutreachAgain = async (id) => {
+  const { data } = await api.post(`/outreach/${id}/run-again`);
+  return data;
+};

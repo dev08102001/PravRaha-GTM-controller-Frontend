@@ -98,29 +98,21 @@ const resolveFollowUpTemplateIndex = (followUpIndex, totalFollowUps = 5) => {
 };
 
 const buildLocalFollowUpSubject = (msg, followUpIndex, totalFollowUps = 5) => {
-  const firstName = firstNameOf(msg.name);
-  const templateIndex = resolveFollowUpTemplateIndex(
-    followUpIndex,
-    totalFollowUps
-  );
+  // Keep every follow-up on Re: + initial so the full campaign
+  // (initial + FU1…FU6) stays one conversation in Gmail/Outlook.
+  void followUpIndex;
+  void totalFollowUps;
+  const fromInitial =
+    msg.initialSubject ||
+    (Array.isArray(msg.emailSequence)
+      ? msg.emailSequence.find((s) => Number(s?.step) === 0)?.subject
+      : "") ||
+    "";
   const base =
-    String(msg.subject || "")
+    String(fromInitial || msg.subject || "")
       .replace(/^re:\s*/i, "")
       .trim() || `5 Qualified leads for ${nicheOf(msg)}`;
-
-  switch (templateIndex) {
-    case 0:
-      return withRePrefix(base);
-    case 1:
-      return `Re: Sincere meeting request ${firstName}`;
-    case 2:
-      return `Re: Any update for me ${firstName}?`;
-    case 3:
-      return `Re: Please acknowledge ${firstName}`;
-    case 4:
-    default:
-      return "Re: :(";
-  }
+  return withRePrefix(base);
 };
 
 /** Founder follow-up arc — last of N always uses the break-up mail. */
@@ -183,12 +175,20 @@ Take care,
 const getEmailSequence = (msg) => {
   const maxFollowUps = clampMaxFollowUps(msg.maxFollowUps, MAX_FOLLOW_UPS);
   const targetLength = 1 + maxFollowUps;
+  const threadedSubject = buildLocalFollowUpSubject(msg, 0, maxFollowUps);
+
+  const withThreadedSubjects = (steps = []) =>
+    steps.map((step) =>
+      Number(step?.step) === 0
+        ? step
+        : { ...step, subject: threadedSubject }
+    );
 
   if (
     Array.isArray(msg.emailSequence) &&
     msg.emailSequence.length === targetLength
   ) {
-    return msg.emailSequence;
+    return withThreadedSubjects(msg.emailSequence);
   }
 
   if (Array.isArray(msg.emailSequence) && msg.emailSequence.length > 0) {
@@ -199,13 +199,13 @@ const getEmailSequence = (msg) => {
       sliced.push({
         step,
         label: SEQUENCE_LABELS[step] || `Step ${step}`,
-        subject: buildLocalFollowUpSubject(msg, step - 1, maxFollowUps),
+        subject: threadedSubject,
         body: buildLocalFollowUpBody(msg, step - 1, maxFollowUps),
         status:
           msg.replyReceived || msg.sequenceCancelled ? "CANCELLED" : "PENDING",
       });
     }
-    return sliced;
+    return withThreadedSubjects(sliced);
   }
 
   const initialSubject = msg.subject || "Hello";
@@ -224,7 +224,7 @@ const getEmailSequence = (msg) => {
     return {
       step,
       label,
-      subject: buildLocalFollowUpSubject(msg, step - 1, maxFollowUps),
+      subject: threadedSubject,
       body: buildLocalFollowUpBody(msg, step - 1, maxFollowUps),
       status: msg.replyReceived || msg.sequenceCancelled ? "CANCELLED" : "PENDING",
     };
